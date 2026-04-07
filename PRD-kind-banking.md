@@ -15,17 +15,18 @@
 1. [Executive Summary](#1-executive-summary)
 2. [Product Overview](#2-product-overview)
 3. [Architecture](#3-architecture)
-4. [MCP Server — LLM Abstraction Layer](#4-mcp-server--llm-abstraction-layer)
+4. [LLM Architecture — Enterprise Hybrid Model](#4-llm-architecture--enterprise-hybrid-model)
 5. [Speech Services — STT/TTS Abstraction Layer](#5-speech-services--stttts-abstraction-layer)
 6. [Feature Requirements](#6-feature-requirements)
 7. [UI Design System](#7-ui-design-system)
 8. [Package Dependencies](#8-package-dependencies)
-9. [Security Requirements](#9-security-requirements)
-10. [Accessibility Requirements](#10-accessibility-requirements)
-11. [Non-Functional Requirements](#11-non-functional-requirements)
-12. [Out of Scope](#12-out-of-scope-poc)
-13. [Suggested Milestones](#13-suggested-poc-milestones)
-14. [Open Questions](#14-open-questions)
+9. [Mockoon API Mocking](#9-mockoon-api-mocking)
+10. [Security Requirements](#10-security-requirements)
+11. [Accessibility Requirements](#11-accessibility-requirements)
+12. [Non-Functional Requirements](#12-non-functional-requirements)
+13. [Out of Scope](#13-out-of-scope-poc)
+14. [Implementation Plan](#14-implementation-plan)
+15. [Open Questions](#15-open-questions)
 
 ---
 
@@ -1739,9 +1740,293 @@ Key differences:
 >
 > No model downloads required — uses native OS-level models. Streaming support planned for future versions.
 
+### 8.1 Development Tools
+
+| Tool | Version | Purpose |
+|---|---|---|
+| **Mockoon** | ^8.x | API mocking for banking APIs and Backend MCP Server |
+| Xcode | 16.0+ | iOS development, App Intents, Foundation Models |
+| Android Studio | Latest | Android development, AICore testing |
+| VS Code / Cursor | Latest | Primary IDE with Flutter extensions |
+
 ---
 
-## 9. Security Requirements
+## 9. Mockoon API Mocking
+
+Mockoon is used to mock all backend APIs during development, enabling frontend development without waiting for backend services. This allows demos and testing without any real backend infrastructure.
+
+### 9.1 Mockoon Setup
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Development Architecture                             │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                          Flutter App                                    │ │
+│  │                                                                         │ │
+│  │  ┌─────────────────┐         ┌─────────────────────────────────────┐  │ │
+│  │  │  On-Device LLM  │         │         HTTP Client (Dio)           │  │ │
+│  │  │ (flutter_local_ │         │                                     │  │ │
+│  │  │      ai)        │         │  Base URL configured per environment│  │ │
+│  │  └─────────────────┘         └──────────────────┬──────────────────┘  │ │
+│  │         │                                       │                      │ │
+│  │         │ On-device                             │ HTTP                 │ │
+│  │         ▼                                       ▼                      │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                    │                         │
+│                                                    │                         │
+│            ┌───────────────────────────────────────┼───────────────────┐    │
+│            │                                       │                   │    │
+│            ▼                                       ▼                   ▼    │
+│  ┌─────────────────┐                 ┌─────────────────┐    ┌─────────────┐│
+│  │   Development   │                 │    Staging      │    │ Production  ││
+│  │                 │                 │                 │    │             ││
+│  │    MOCKOON      │                 │  Real Backend   │    │ Real Backend││
+│  │  localhost:3000 │                 │   (staging)     │    │  (prod)     ││
+│  │                 │                 │                 │    │             ││
+│  └─────────────────┘                 └─────────────────┘    └─────────────┘│
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.2 Environment Configuration
+
+```dart
+// lib/core/config/environment.dart
+
+enum Environment { development, staging, production }
+
+class AppConfig {
+  static Environment environment = Environment.development;
+
+  static String get baseUrl {
+    switch (environment) {
+      case Environment.development:
+        return 'http://localhost:3000'; // Mockoon
+      case Environment.staging:
+        return 'https://api-staging.kindbanking.com';
+      case Environment.production:
+        return 'https://api.kindbanking.com';
+    }
+  }
+
+  static bool get useMockData => environment == Environment.development;
+}
+```
+
+### 9.3 Mockoon Endpoints
+
+#### 9.3.1 Banking API Endpoints
+
+| Method | Endpoint | Description | Response |
+|---|---|---|---|
+| `GET` | `/api/v1/accounts` | List user accounts | Array of accounts |
+| `GET` | `/api/v1/accounts/:id/balance` | Get account balance | Balance object |
+| `GET` | `/api/v1/transactions` | List transactions | Paginated transactions |
+| `GET` | `/api/v1/transactions/:id` | Transaction details | Transaction object |
+| `POST` | `/api/v1/transfers` | Create transfer | Transfer confirmation |
+| `GET` | `/api/v1/payees` | List saved payees | Array of payees |
+| `GET` | `/api/v1/billers` | List billers | Array of billers |
+| `POST` | `/api/v1/bills/pay` | Pay a bill | Payment confirmation |
+| `GET` | `/api/v1/cards` | List user cards | Array of cards |
+| `POST` | `/api/v1/cards/:id/freeze` | Freeze/unfreeze card | Card status |
+
+#### 9.3.2 Backend MCP Server Endpoints
+
+| Method | Endpoint | Description | Response |
+|---|---|---|---|
+| `POST` | `/api/v1/llm/generate` | Generate LLM response | LLM response object |
+| `POST` | `/api/v1/llm/generate/stream` | Stream LLM response | SSE stream |
+| `GET` | `/api/v1/llm/capabilities` | Get available providers | Provider list |
+| `GET` | `/api/v1/llm/usage` | Get usage statistics | Usage stats |
+| `POST` | `/api/v1/auth/token` | Get auth token | JWT token |
+| `POST` | `/api/v1/auth/refresh` | Refresh token | New JWT token |
+
+#### 9.3.3 Sample Mock Responses
+
+**GET /api/v1/accounts**
+```json
+{
+  "accounts": [
+    {
+      "id": "acc_001",
+      "type": "checking",
+      "name": "Primary Checking",
+      "number": "****4582",
+      "balance": 12450.00,
+      "currency": "USD",
+      "available_balance": 12450.00
+    },
+    {
+      "id": "acc_002",
+      "type": "savings",
+      "name": "Emergency Fund",
+      "number": "****7891",
+      "balance": 25000.00,
+      "currency": "USD",
+      "available_balance": 25000.00
+    }
+  ]
+}
+```
+
+**GET /api/v1/transactions**
+```json
+{
+  "transactions": [
+    {
+      "id": "txn_001",
+      "type": "debit",
+      "amount": -82.50,
+      "currency": "USD",
+      "description": "Whole Foods Market",
+      "category": "groceries",
+      "date": "2025-04-07T14:34:00Z",
+      "status": "completed",
+      "merchant": {
+        "name": "Whole Foods Market",
+        "logo": "https://example.com/logos/wholefoods.png",
+        "category": "Groceries"
+      }
+    },
+    {
+      "id": "txn_002",
+      "type": "credit",
+      "amount": 3200.00,
+      "currency": "USD",
+      "description": "Payroll Deposit",
+      "category": "income",
+      "date": "2025-04-06T09:00:00Z",
+      "status": "completed"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total": 156,
+    "total_pages": 8
+  }
+}
+```
+
+**POST /api/v1/llm/generate**
+```json
+{
+  "id": "resp_mock_001",
+  "text": "Based on your recent transactions, you spent $450.32 on groceries this month, which is 12% higher than last month. Your largest grocery purchase was $82.50 at Whole Foods Market on April 7th.",
+  "provider": "mock",
+  "model": "mockoon-v1",
+  "usage": {
+    "prompt_tokens": 45,
+    "completion_tokens": 52,
+    "total_tokens": 97
+  },
+  "metadata": {
+    "latency_ms": 150,
+    "cached": false
+  }
+}
+```
+
+**POST /api/v1/llm/generate/stream (SSE)**
+```
+data: {"type": "token", "content": "Based"}
+data: {"type": "token", "content": " on"}
+data: {"type": "token", "content": " your"}
+data: {"type": "token", "content": " recent"}
+data: {"type": "token", "content": " transactions"}
+...
+data: {"type": "done", "id": "resp_mock_001", "provider": "mock"}
+```
+
+### 9.4 Mockoon Configuration File
+
+The Mockoon environment file should be stored in the repository:
+
+```
+project_root/
+├── mockoon/
+│   ├── kind-banking-api.json       # Banking API mocks
+│   ├── kind-banking-mcp.json       # MCP Server mocks
+│   └── README.md                   # Setup instructions
+```
+
+### 9.5 Running Mockoon
+
+**Option 1: Mockoon Desktop App**
+```bash
+# Import the environment files
+# File → Open Environment → Select kind-banking-api.json
+# Start the server (default port 3000)
+```
+
+**Option 2: Mockoon CLI (for CI/CD)**
+```bash
+# Install Mockoon CLI
+npm install -g @mockoon/cli
+
+# Run mock server
+mockoon-cli start --data ./mockoon/kind-banking-api.json --port 3000
+
+# Run MCP mock server (separate port)
+mockoon-cli start --data ./mockoon/kind-banking-mcp.json --port 3001
+```
+
+**Option 3: Docker**
+```bash
+# Run Mockoon in Docker
+docker run -d --name mockoon \
+  -p 3000:3000 \
+  -v $(pwd)/mockoon:/data \
+  mockoon/cli:latest \
+  --data /data/kind-banking-api.json
+```
+
+### 9.6 Mock Scenarios
+
+Mockoon supports multiple response scenarios for testing different states:
+
+| Scenario | Trigger | Use Case |
+|---|---|---|
+| **Happy Path** | Default | Normal successful responses |
+| **Empty State** | Header: `X-Mock-Scenario: empty` | Test empty lists, new user |
+| **Error State** | Header: `X-Mock-Scenario: error` | Test error handling |
+| **Slow Response** | Header: `X-Mock-Scenario: slow` | Test loading states (2s delay) |
+| **Offline** | Stop Mockoon | Test offline fallback to on-device |
+| **Auth Expired** | Header: `X-Mock-Scenario: auth-expired` | Test token refresh flow |
+
+### 9.7 Integration with Flutter
+
+```dart
+// lib/core/network/api_client.dart
+
+class ApiClient {
+  late final Dio _dio;
+
+  ApiClient() {
+    _dio = Dio(BaseOptions(
+      baseUrl: AppConfig.baseUrl,
+      connectTimeout: Duration(seconds: 30),
+      receiveTimeout: Duration(seconds: 30),
+    ));
+
+    // Add mock scenario header in development
+    if (AppConfig.environment == Environment.development) {
+      _dio.interceptors.add(InterceptorsWrapper(
+        onRequest: (options, handler) {
+          // Can add mock scenario header dynamically
+          // options.headers['X-Mock-Scenario'] = 'happy';
+          handler.next(options);
+        },
+      ));
+    }
+  }
+}
+```
+
+---
+
+## 10. Security Requirements
 
 | ID | Requirement | Details | Priority |
 |---|---|---|---|
@@ -1759,7 +2044,7 @@ Key differences:
 
 ---
 
-## 10. Accessibility Requirements
+## 11. Accessibility Requirements
 
 | ID | Requirement | Standard | Priority |
 |---|---|---|---|
@@ -1774,7 +2059,7 @@ Key differences:
 
 ---
 
-## 11. Non-Functional Requirements
+## 12. Non-Functional Requirements
 
 | Requirement | Target |
 |---|---|
@@ -1789,7 +2074,7 @@ Key differences:
 
 ---
 
-## 12. Out of Scope (PoC)
+## 13. Out of Scope (PoC)
 
 The following are explicitly excluded from this proof of concept to prevent scope creep during development:
 
@@ -1807,7 +2092,7 @@ The following are explicitly excluded from this proof of concept to prevent scop
 
 ---
 
-## 13. Implementation Plan
+## 14. Implementation Plan
 
 The implementation is structured in **3 phases** to enable early demos with on-device LLM, while deferring the complex Backend MCP Server to the final phase.
 
@@ -1859,12 +2144,15 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 | M1.3 | Routing setup | Configure go_router with route definitions, deep link support | Must Have |
 | M1.4 | DI setup | Create `locator.dart` with Provider registrations | Must Have |
 | M1.5 | Theme setup | Create `app_theme.dart`, color tokens, typography | Must Have |
-| M1.6 | Biometric auth | Implement `local_auth` for Face ID / Fingerprint | Must Have |
-| M1.7 | PIN fallback | Implement 6-digit PIN entry with secure storage | Must Have |
-| M1.8 | Auth gate | Create route guard for protected screens | Must Have |
-| M1.9 | Session management | Implement token storage, session timeout | Should Have |
+| M1.6 | **Mockoon setup** | Create Mockoon environment files, configure endpoints, test connection | Must Have |
+| M1.7 | **Environment config** | Create `AppConfig` with dev/staging/prod base URLs | Must Have |
+| M1.8 | **API client** | Create Dio-based API client with Mockoon integration | Must Have |
+| M1.9 | Biometric auth | Implement `local_auth` for Face ID / Fingerprint | Must Have |
+| M1.10 | PIN fallback | Implement 6-digit PIN entry with secure storage | Must Have |
+| M1.11 | Auth gate | Create route guard for protected screens | Must Have |
+| M1.12 | Session management | Implement token storage, session timeout | Should Have |
 
-**M1 Deliverable:** App launches, user can authenticate with biometric/PIN
+**M1 Deliverable:** App launches with Mockoon backend, user can authenticate with biometric/PIN
 
 ---
 
@@ -1891,20 +2179,22 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M3.1 | Mock data service | Create JSON mock data for all banking features | Must Have |
-| M3.2 | Balance screen | Account summary, balance display, hide/show toggle | Must Have |
-| M3.3 | Balance bloc | UseCase and ServiceAdapter for balance data | Must Have |
-| M3.4 | Transfer screen | Payee selector, amount input, confirmation flow | Must Have |
-| M3.5 | Transfer bloc | UseCase for transfer validation and execution | Must Have |
-| M3.6 | Transactions screen | Paginated list, filters, transaction detail sheet | Must Have |
-| M3.7 | Transactions bloc | UseCase with filtering and pagination | Must Have |
-| M3.8 | Pay bills screen | Biller list, amount, date selection, confirmation | Must Have |
-| M3.9 | Pay bills bloc | UseCase for bill payment flow | Must Have |
-| M3.10 | Cards screen | Card list, freeze/unfreeze, card number reveal | Must Have |
-| M3.11 | Cards bloc | UseCase for card management | Must Have |
-| M3.12 | Deep link handling | Pre-fill screens from deep link parameters | Should Have |
+| M3.1 | **Mockoon Banking API** | Configure all banking endpoints in Mockoon (accounts, transactions, transfers, bills, cards) | Must Have |
+| M3.2 | **Mockoon scenarios** | Create happy path, error, empty, and slow response scenarios | Must Have |
+| M3.3 | Balance screen | Account summary, balance display, hide/show toggle | Must Have |
+| M3.4 | Balance bloc | UseCase and ServiceAdapter calling Mockoon `/api/v1/accounts` | Must Have |
+| M3.5 | Transfer screen | Payee selector, amount input, confirmation flow | Must Have |
+| M3.6 | Transfer bloc | UseCase calling Mockoon `/api/v1/transfers` | Must Have |
+| M3.7 | Transactions screen | Paginated list, filters, transaction detail sheet | Must Have |
+| M3.8 | Transactions bloc | UseCase calling Mockoon `/api/v1/transactions` with pagination | Must Have |
+| M3.9 | Pay bills screen | Biller list, amount, date selection, confirmation | Must Have |
+| M3.10 | Pay bills bloc | UseCase calling Mockoon `/api/v1/bills/pay` | Must Have |
+| M3.11 | Cards screen | Card list, freeze/unfreeze, card number reveal | Must Have |
+| M3.12 | Cards bloc | UseCase calling Mockoon `/api/v1/cards` | Must Have |
+| M3.13 | Deep link handling | Pre-fill screens from deep link parameters | Should Have |
+| M3.14 | **Error handling** | Handle Mockoon error scenarios, show appropriate UI | Must Have |
 
-**M3 Deliverable:** All 5 banking screens functional with mock data
+**M3 Deliverable:** All 5 banking screens functional with Mockoon API
 
 ---
 
@@ -2067,17 +2357,19 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M10.1 | API client setup | Create Dio-based HTTP client with interceptors | Must Have |
-| M10.2 | Auth integration | JWT token handling, refresh flow | Must Have |
-| M10.3 | Generate endpoint | Implement `/api/v1/llm/generate` call | Must Have |
-| M10.4 | Streaming support | Implement SSE streaming for `/generate/stream` | Must Have |
-| M10.5 | Error handling | Map API errors to user-friendly messages | Must Have |
-| M10.6 | Retry logic | Exponential backoff for transient failures | Must Have |
-| M10.7 | Offline detection | Detect offline, route to on-device only | Must Have |
-| M10.8 | Provider display | Show which provider responded (on-device/cloud) | Must Have |
-| M10.9 | Timeout handling | Configurable timeouts, cancel long requests | Should Have |
+| M10.1 | **Mockoon MCP API** | Configure MCP endpoints in Mockoon (`/llm/generate`, `/llm/stream`, `/llm/capabilities`) | Must Have |
+| M10.2 | **Mockoon SSE** | Configure Server-Sent Events streaming in Mockoon for `/llm/generate/stream` | Must Have |
+| M10.3 | API client setup | Create Dio-based HTTP client with interceptors | Must Have |
+| M10.4 | Auth integration | JWT token handling, refresh flow (mock tokens from Mockoon) | Must Have |
+| M10.5 | Generate endpoint | Implement `/api/v1/llm/generate` call | Must Have |
+| M10.6 | Streaming support | Implement SSE streaming for `/generate/stream` | Must Have |
+| M10.7 | Error handling | Map API errors to user-friendly messages | Must Have |
+| M10.8 | Retry logic | Exponential backoff for transient failures | Must Have |
+| M10.9 | Offline detection | Detect offline, route to on-device only | Must Have |
+| M10.10 | Provider display | Show which provider responded (on-device/cloud/mock) | Must Have |
+| M10.11 | Timeout handling | Configurable timeouts, cancel long requests | Should Have |
 
-**M10 Deliverable:** App can call backend MCP server for cloud LLM
+**M10 Deliverable:** App can call Mockoon MCP server (ready to switch to real backend later)
 
 ---
 
@@ -2216,7 +2508,7 @@ LEGEND:
 
 ---
 
-## 14. Open Questions
+## 15. Open Questions
 
 ### Client-Side Questions
 
