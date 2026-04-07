@@ -182,305 +182,527 @@ ios/
 
 ---
 
-## 4. MCP Server — LLM Abstraction Layer
+## 4. LLM Architecture — Enterprise Hybrid Model
 
-The MCP (Model Context Protocol) Server is a standalone component that provides a unified interface for LLM access. The banking app communicates exclusively with the MCP Server — it has no knowledge of whether responses originate from on-device models, local inference servers, or cloud APIs.
+The LLM architecture follows an **enterprise hybrid model** that separates on-device processing from backend services. This design ensures maximum privacy for sensitive data while maintaining centralized control over cloud API access, logging, and cost management.
 
 ### 4.1 Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Banking App (Flutter)                     │
-│                                                                  │
-│   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐     │
-│   │  Chat Screen  │    │  Hub Actions  │    │  Voice Input  │     │
-│   └──────┬───────┘    └──────┬───────┘    └──────┬───────┘     │
-│          │                   │                   │              │
-│          └───────────────────┼───────────────────┘              │
-│                              ▼                                   │
-│                    ┌─────────────────┐                          │
-│                    │   MCP Client     │                          │
-│                    │  (Dart Package)  │                          │
-│                    └────────┬────────┘                          │
-└─────────────────────────────┼───────────────────────────────────┘
-                              │ MCP Protocol (JSON-RPC / stdio)
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         MCP Server                               │
-│                                                                  │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │                    Router / Orchestrator                 │   │
-│   │  • Capability detection (device, OS version, model avail)│   │
-│   │  • Privacy policy enforcement                            │   │
-│   │  • Fallback chain management                             │   │
-│   │  • Response normalization                                │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                              │                                   │
-│         ┌────────────────────┼────────────────────┐             │
-│         ▼                    ▼                    ▼             │
-│   ┌───────────┐        ┌───────────┐        ┌───────────┐      │
-│   │  On-Device │        │   Local    │        │   Cloud    │      │
-│   │  Provider  │        │  Provider  │        │  Provider  │      │
-│   └─────┬─────┘        └─────┬─────┘        └─────┬─────┘      │
-│         │                    │                    │             │
-└─────────┼────────────────────┼────────────────────┼─────────────┘
-          ▼                    ▼                    ▼
-    ┌───────────┐        ┌───────────┐        ┌───────────┐
-    │ Apple FM  │        │  Ollama   │        │  OpenAI   │
-    │ Gemini    │        │ llama.cpp │        │ Anthropic │
-    │ Nano      │        │  LM Studio│        │  Gemini   │
-    └───────────┘        └───────────┘        └───────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER'S DEVICE                                   │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                          Flutter App                                    │ │
+│  │                                                                         │ │
+│  │  ┌───────────────────────────────────────────────────────────────────┐ │ │
+│  │  │                      Local LLM Router                              │ │ │
+│  │  │                                                                    │ │ │
+│  │  │   • Check on-device LLM availability                               │ │ │
+│  │  │   • Detect PII/sensitive data in query                            │ │ │
+│  │  │   • Enforce user privacy preferences                              │ │ │
+│  │  │   • Route to on-device OR backend                                 │ │ │
+│  │  │                                                                    │ │ │
+│  │  └───────────────┬───────────────────────────────┬───────────────────┘ │ │
+│  │                  │                               │                      │ │
+│  │                  ▼                               ▼                      │ │
+│  │  ┌───────────────────────────┐   ┌───────────────────────────────────┐ │ │
+│  │  │     On-Device Provider    │   │        Backend MCP Client         │ │ │
+│  │  │     (flutter_local_ai)    │   │                                   │ │ │
+│  │  │                           │   │   • Authenticated API calls       │ │ │
+│  │  │   • Apple Foundation      │   │   • No API keys stored locally    │ │ │
+│  │  │     Models (iOS 26+)      │   │   • Request/response logging      │ │ │
+│  │  │   • ML Kit GenAI          │   │                                   │ │ │
+│  │  │     (Android API 26+)     │   │                                   │ │ │
+│  │  │                           │   │                                   │ │ │
+│  │  │   ✅ Data never leaves    │   │                                   │──────────┐
+│  │  │      the device           │   │                                   │ │ │      │
+│  │  └───────────────────────────┘   └───────────────────────────────────┘ │ │      │
+│  │                                                                         │ │      │
+│  └─────────────────────────────────────────────────────────────────────────┘ │      │
+│                                                                              │      │
+└──────────────────────────────────────────────────────────────────────────────┘      │
+                                                                                       │
+                                         HTTPS (TLS 1.3)                               │
+                                                                                       │
+┌──────────────────────────────────────────────────────────────────────────────────────┘
+│
+▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           BACKEND INFRASTRUCTURE                             │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                          API Gateway                                    │ │
+│  │                                                                         │ │
+│  │   • JWT/OAuth authentication                                           │ │
+│  │   • Rate limiting (per user, per tier)                                 │ │
+│  │   • Request validation & sanitization                                  │ │
+│  │   • DDoS protection                                                    │ │
+│  │                                                                         │ │
+│  └────────────────────────────────────┬───────────────────────────────────┘ │
+│                                       │                                      │
+│                                       ▼                                      │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                       MCP Server (Backend)                              │ │
+│  │                                                                         │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │ │
+│  │  │                    Router / Orchestrator                         │  │ │
+│  │  │                                                                  │  │ │
+│  │  │   • Provider selection (cost, capability, load balancing)       │  │ │
+│  │  │   • PII scrubbing before external API calls                     │  │ │
+│  │  │   • Response caching (reduce costs)                             │  │ │
+│  │  │   • Model selection (GPT-4 vs GPT-3.5 based on complexity)     │  │ │
+│  │  │   • Prompt injection protection                                 │  │ │
+│  │  │                                                                  │  │ │
+│  │  └──────────────────────────┬──────────────────────────────────────┘  │ │
+│  │                             │                                          │ │
+│  │         ┌───────────────────┼───────────────────┐                     │ │
+│  │         ▼                   ▼                   ▼                     │ │
+│  │  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐             │ │
+│  │  │   Ollama    │     │   OpenAI    │     │  Anthropic  │             │ │
+│  │  │ (Self-host) │     │  Provider   │     │  Provider   │             │ │
+│  │  └─────────────┘     └─────────────┘     └─────────────┘             │ │
+│  │                                                                        │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                       │                                      │
+│                                       ▼                                      │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                      Enterprise Services                                │ │
+│  │                                                                         │ │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │ │
+│  │  │  Logging &  │  │   Usage &   │  │  Analytics  │  │   A/B Test  │  │ │
+│  │  │   Audit     │  │   Billing   │  │  Dashboard  │  │  Framework  │  │ │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘  │ │
+│  │                                                                         │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 Provider Types
+### 4.2 Component Responsibilities
 
-| Provider Type | Examples | Network Required | Privacy Level | Latency |
-|---|---|---|---|---|
-| **On-Device** | `flutter_local_ai` — Apple Foundation Models (iOS 26+), ML Kit GenAI/Gemini Nano (Android API 26+) | No | Maximum | Low |
-| **Local Server** | Ollama, llama.cpp, LM Studio, LocalAI | Local network only | High | Medium |
-| **Cloud API** | OpenAI, Anthropic Claude, Google Gemini API, Azure OpenAI | Yes | Standard | Variable |
+#### 4.2.1 Client-Side: Local LLM Router
 
-> **Note:** The `flutter_local_ai` package provides a **unified API** across iOS and Android, eliminating the need for separate MethodChannel implementations. Both platforms use native OS-level models with zero model downloads required.
+The Local LLM Router runs **within the Flutter app** and is responsible for deciding whether to process locally or send to backend.
 
-### 4.3 Routing Logic
+| Responsibility | Description |
+|---|---|
+| **Availability Detection** | Check if `flutter_local_ai` is available on device |
+| **PII Detection** | Scan queries for sensitive data (account numbers, SSN, etc.) |
+| **Privacy Enforcement** | Respect user's privacy level setting |
+| **Routing Decision** | Route to on-device or backend based on rules |
+| **On-Device Execution** | Execute LLM queries locally via `flutter_local_ai` |
+| **Backend Communication** | Send non-sensitive queries to Backend MCP Server |
 
-The MCP Server implements a **privacy-first fallback chain**. The app can request a preferred privacy level, and the server routes accordingly.
+#### 4.2.2 Server-Side: Backend MCP Server
 
-| Privacy Level | Routing Order | Use Case |
+The Backend MCP Server runs on **enterprise infrastructure** and handles all cloud LLM interactions.
+
+| Responsibility | Description |
+|---|---|
+| **API Key Management** | Store and rotate cloud API keys securely |
+| **Provider Routing** | Select optimal provider (cost, latency, capability) |
+| **PII Scrubbing** | Remove any residual PII before external API calls |
+| **Cost Optimization** | Cache responses, use cheaper models when appropriate |
+| **Audit Logging** | Log all requests/responses for compliance |
+| **Rate Limiting** | Enforce per-user and per-tier limits |
+| **A/B Testing** | Route percentage of traffic to test new models/prompts |
+
+### 4.3 Provider Types
+
+| Provider | Location | Network | Privacy | API Keys | Use Case |
+|---|---|---|---|---|---|
+| **On-Device** | Client | None | Maximum | None | PII queries, offline, privacy-conscious users |
+| **Ollama** | Backend (self-hosted) | Internal | High | None | Cost-sensitive, data residency requirements |
+| **OpenAI** | Backend → Cloud | External | Standard | Backend only | High capability queries |
+| **Anthropic** | Backend → Cloud | External | Standard | Backend only | Complex reasoning, long context |
+| **Azure OpenAI** | Backend → Cloud | External | Standard | Backend only | Enterprise compliance, regional deployment |
+
+### 4.4 Routing Logic
+
+#### 4.4.1 Client-Side Routing Decision
+
+```dart
+// lib/core/llm/local_llm_router.dart
+
+class LocalLlmRouter {
+  final FlutterLocalAi _localAi = FlutterLocalAi.instance;
+  final BackendMcpClient _backendClient;
+  final PiiDetector _piiDetector;
+  final UserSettings _userSettings;
+
+  Future<LlmResponse> route(LlmRequest request) async {
+    // 1. Get user's privacy preference
+    final privacyLevel = _userSettings.privacyLevel;
+
+    // 2. Check if query contains PII
+    final piiResult = _piiDetector.analyze(request.prompt);
+
+    // 3. Check on-device availability
+    final onDeviceAvailable = await _localAi.isAvailable();
+
+    // 4. Routing decision matrix
+    if (privacyLevel == PrivacyLevel.maximum) {
+      // User demands maximum privacy
+      if (onDeviceAvailable) {
+        return _executeOnDevice(request);
+      } else {
+        throw LlmException(
+          code: 'ON_DEVICE_REQUIRED',
+          message: 'Maximum privacy requires on-device LLM, but it is not available',
+        );
+      }
+    }
+
+    if (piiResult.containsPii && onDeviceAvailable) {
+      // Sensitive data detected - keep on device
+      _logLocalDecision('PII detected, routing to on-device');
+      return _executeOnDevice(request);
+    }
+
+    if (privacyLevel == PrivacyLevel.high && onDeviceAvailable) {
+      // User prefers privacy, on-device available
+      return _executeOnDevice(request);
+    }
+
+    // Standard privacy or on-device unavailable - use backend
+    return _executeViaBackend(request);
+  }
+
+  Future<LlmResponse> _executeOnDevice(LlmRequest request) async {
+    final response = await _localAi.generateText(prompt: request.prompt);
+    return LlmResponse(
+      text: response.text,
+      provider: 'on_device',
+      isOnDevice: true,
+      privacyLevel: PrivacyLevel.maximum,
+    );
+  }
+
+  Future<LlmResponse> _executeViaBackend(LlmRequest request) async {
+    // Backend handles provider selection
+    return await _backendClient.generate(request);
+  }
+}
+```
+
+#### 4.4.2 Privacy Levels
+
+| Level | Routing Behavior | Data Handling |
 |---|---|---|
-| `maximum` | On-Device only. Fail if unavailable. | Sensitive financial queries, PII involved |
-| `high` | On-Device → Local Server → Fail | Default for banking Q&A |
-| `standard` | On-Device → Local Server → Cloud API | General queries, non-sensitive |
-| `any` | Fastest available provider | Development / testing only |
+| `maximum` | On-device only. Fail if unavailable. | Zero data transmission |
+| `high` | Prefer on-device. Backend only if on-device unavailable AND no PII. | PII never sent to backend |
+| `standard` | On-device for PII. Backend for general queries. | PII stays local, general queries to backend |
+| `performance` | Backend preferred for speed. On-device for PII only. | Optimized for response time |
 
-#### 4.3.1 Capability Detection
+#### 4.4.3 PII Detection
 
-On app startup, the MCP Server probes available providers:
+The client-side PII detector scans queries before routing:
 
-| Check | Method | Result |
-|---|---|---|
-| On-Device (iOS) | `FlutterLocalAi.instance.isAvailable()` | Available on iOS 26+ with Apple Intelligence enabled |
-| On-Device (Android) | `FlutterLocalAi.instance.isAvailable()` | Available on Android API 26+ with Google AICore installed |
-| Local Server (Ollama, etc.) | HTTP health check to configured endpoint | Available if server responds |
-| Cloud API | API key presence + optional ping | Available if configured |
+```dart
+// lib/core/llm/pii_detector.dart
 
-> **flutter_local_ai Availability Notes:**
-> - **iOS:** Requires iOS 26.0+, device must have Apple Intelligence enabled in system settings
-> - **Android:** Requires Google AICore system app (error code -101 indicates missing/outdated AICore)
-> - **Initialization:** Call `FlutterLocalAi.instance.initialize()` on iOS (required) and Android (recommended)
+class PiiDetector {
+  static final _patterns = {
+    'account_number': RegExp(r'\b\d{10,16}\b'),
+    'ssn': RegExp(r'\b\d{3}-\d{2}-\d{4}\b'),
+    'credit_card': RegExp(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b'),
+    'email': RegExp(r'\b[\w.+-]+@[\w-]+\.[\w.-]+\b'),
+    'phone': RegExp(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'),
+    'date_of_birth': RegExp(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b'),
+  };
 
-### 4.4 MCP Server Modes
+  PiiResult analyze(String text) {
+    final detectedTypes = <String>[];
 
-The MCP Server can run in different modes depending on deployment needs:
+    for (final entry in _patterns.entries) {
+      if (entry.value.hasMatch(text)) {
+        detectedTypes.add(entry.key);
+      }
+    }
 
-| Mode | Description | Use Case |
-|---|---|---|
-| **Embedded** | MCP Server logic runs within the Flutter app process via platform channels | Simplest deployment, on-device providers only |
-| **Local Daemon** | MCP Server runs as a separate process on the same device | Supports local inference servers (Ollama) |
-| **Remote** | MCP Server runs on a user's local network or cloud | Enterprise deployment, shared model access |
+    return PiiResult(
+      containsPii: detectedTypes.isNotEmpty,
+      detectedTypes: detectedTypes,
+    );
+  }
+}
+```
 
-For the PoC, **Embedded mode** is the primary target, with **Local Daemon mode** as a stretch goal to demonstrate Ollama integration.
+### 4.5 Backend MCP Server Specification
 
-### 4.5 MCP Server Requirements
+#### 4.5.1 API Gateway Requirements
 
 | ID | Requirement | Details | Priority |
 |---|---|---|---|
-| MCP-01 | Unified LLM interface | Single protocol for all LLM interactions regardless of provider | Must Have |
-| MCP-02 | Provider abstraction | App never knows which provider is serving the request | Must Have |
-| MCP-03 | Capability detection | Probe and cache available providers on startup | Must Have |
-| MCP-04 | Privacy-level routing | Route requests based on requested privacy level | Must Have |
-| MCP-05 | Streaming responses | Support token-by-token streaming from all providers | Must Have |
-| MCP-06 | Fallback chain | Automatic fallback when preferred provider unavailable | Must Have |
-| MCP-07 | Response normalization | Consistent response format regardless of provider | Must Have |
-| MCP-08 | Provider health monitoring | Detect provider failures and update routing | Should Have |
-| MCP-09 | Request timeout handling | Configurable timeouts per provider type | Should Have |
-| MCP-10 | Ollama integration | Support local Ollama server as provider | Should Have |
-| MCP-11 | Cloud API support | Support OpenAI/Anthropic/Gemini as fallback providers | Should Have |
-| MCP-12 | Configuration API | Runtime configuration of providers and routing rules | Could Have |
+| GW-01 | Authentication | JWT tokens with refresh, OAuth 2.0 support | Must Have |
+| GW-02 | Rate Limiting | Configurable per user, per tier, per endpoint | Must Have |
+| GW-03 | Request Validation | Schema validation, size limits, injection protection | Must Have |
+| GW-04 | TLS 1.3 | Encrypted transport, certificate pinning support | Must Have |
+| GW-05 | DDoS Protection | Rate-based blocking, geographic restrictions | Should Have |
+| GW-06 | Request Logging | Log all requests with correlation IDs | Must Have |
 
-### 4.6 MCP Protocol Messages
+#### 4.5.2 MCP Server Requirements
 
-The MCP Server uses JSON-RPC 2.0 over stdio (embedded) or HTTP (daemon/remote).
+| ID | Requirement | Details | Priority |
+|---|---|---|---|
+| MCP-01 | Provider Abstraction | Unified interface for all cloud LLM providers | Must Have |
+| MCP-02 | Provider Routing | Select provider based on cost, capability, availability | Must Have |
+| MCP-03 | PII Scrubbing | Final PII scan before external API calls | Must Have |
+| MCP-04 | Response Caching | Cache common responses to reduce costs | Should Have |
+| MCP-05 | Streaming Support | Stream tokens from providers to client | Must Have |
+| MCP-06 | Model Selection | Choose model tier based on query complexity | Should Have |
+| MCP-07 | Fallback Chain | Automatic failover between providers | Must Have |
+| MCP-08 | Prompt Templates | Managed prompt templates for banking use cases | Should Have |
+| MCP-09 | Context Management | Handle conversation history server-side | Should Have |
+| MCP-10 | Health Monitoring | Monitor provider health, auto-disable unhealthy | Must Have |
 
-#### Request: `llm/generate`
+#### 4.5.3 Enterprise Services Requirements
+
+| ID | Requirement | Details | Priority |
+|---|---|---|---|
+| ENT-01 | Audit Logging | Immutable logs of all LLM interactions | Must Have |
+| ENT-02 | Usage Tracking | Track tokens, costs per user/department | Must Have |
+| ENT-03 | Analytics Dashboard | Real-time usage, error rates, latency metrics | Should Have |
+| ENT-04 | A/B Testing | Route traffic percentage to test variants | Should Have |
+| ENT-05 | Cost Alerts | Alert when usage exceeds thresholds | Should Have |
+| ENT-06 | SIEM Integration | Export logs to enterprise SIEM (Splunk, etc.) | Should Have |
+| ENT-07 | Compliance Reports | Generate GDPR, SOC2 compliance reports | Could Have |
+
+### 4.6 API Specification
+
+#### 4.6.1 Backend MCP API Endpoints
+
+```
+POST /api/v1/llm/generate
+POST /api/v1/llm/generate/stream
+GET  /api/v1/llm/capabilities
+GET  /api/v1/llm/usage
+POST /api/v1/llm/feedback
+```
+
+#### 4.6.2 Generate Request
 
 ```json
+POST /api/v1/llm/generate
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
 {
-  "jsonrpc": "2.0",
-  "method": "llm/generate",
-  "params": {
-    "prompt": "What is my account balance?",
-    "context": [...],
-    "privacy_level": "high",
-    "stream": true,
-    "max_tokens": 256
-  },
-  "id": 1
+  "prompt": "What are my recent transactions?",
+  "context": [
+    {"role": "user", "content": "Show my balance"},
+    {"role": "assistant", "content": "Your balance is $12,450.00"}
+  ],
+  "options": {
+    "max_tokens": 256,
+    "temperature": 0.7,
+    "preferred_provider": null,
+    "session_id": "uuid-session-123"
+  }
 }
 ```
 
-#### Response (streaming):
+#### 4.6.3 Generate Response
 
 ```json
-{"jsonrpc": "2.0", "result": {"type": "token", "content": "Your"}, "id": 1}
-{"jsonrpc": "2.0", "result": {"type": "token", "content": " current"}, "id": 1}
-{"jsonrpc": "2.0", "result": {"type": "token", "content": " balance"}, "id": 1}
+{
+  "id": "resp_abc123",
+  "text": "Here are your recent transactions...",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "usage": {
+    "prompt_tokens": 45,
+    "completion_tokens": 128,
+    "total_tokens": 173
+  },
+  "metadata": {
+    "latency_ms": 1250,
+    "cached": false,
+    "cost_usd": 0.00035
+  }
+}
+```
+
+#### 4.6.4 Streaming Response
+
+```
+POST /api/v1/llm/generate/stream
+Authorization: Bearer <jwt_token>
+
+Response: Server-Sent Events (SSE)
+
+data: {"type": "token", "content": "Here"}
+data: {"type": "token", "content": " are"}
+data: {"type": "token", "content": " your"}
 ...
-{"jsonrpc": "2.0", "result": {"type": "done", "provider": "apple_foundation_models"}, "id": 1}
+data: {"type": "done", "id": "resp_abc123", "provider": "openai", "usage": {...}}
 ```
 
-#### Request: `llm/capabilities`
+### 4.7 Security Considerations
 
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "llm/capabilities",
-  "params": {},
-  "id": 2
-}
-```
+| Concern | Mitigation |
+|---|---|
+| **API Keys in App** | Never stored on client. All cloud calls via backend. |
+| **PII Leakage** | Client-side PII detection + server-side scrubbing |
+| **Prompt Injection** | Input sanitization, output validation, prompt templates |
+| **Man-in-the-Middle** | TLS 1.3, certificate pinning |
+| **Token Theft** | Short-lived JWTs, secure storage, refresh rotation |
+| **Audit Trail** | Immutable logs, correlation IDs, tamper detection |
+| **Cost Attacks** | Rate limiting, usage caps, anomaly detection |
 
-#### Response:
+### 4.8 Client-Side Implementation
 
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "providers": [
-      {"id": "apple_fm", "type": "on_device", "available": true, "model": "apple-foundation-4b"},
-      {"id": "ollama", "type": "local", "available": true, "model": "llama3.2:3b"},
-      {"id": "openai", "type": "cloud", "available": true, "model": "gpt-4o-mini"}
-    ],
-    "default_privacy_level": "high"
-  },
-  "id": 2
-}
-```
-
-### 4.7 Folder Structure Addition
+#### 4.8.1 Folder Structure
 
 ```
 lib/
 ├── core/
-│   ├── mcp/
-│   │   ├── mcp_client.dart           # Dart client for MCP protocol
-│   │   ├── mcp_embedded_server.dart  # Embedded mode server logic
-│   │   ├── providers/
-│   │   │   ├── llm_provider.dart     # Abstract provider interface
-│   │   │   ├── local_ai_provider.dart    # flutter_local_ai wrapper (iOS + Android)
-│   │   │   ├── ollama_provider.dart      # Local Ollama server
-│   │   │   └── cloud_api_provider.dart   # OpenAI/Anthropic/Gemini API
-│   │   ├── router/
-│   │   │   ├── capability_detector.dart
-│   │   │   └── privacy_router.dart
+│   ├── llm/
+│   │   ├── local_llm_router.dart         # Routing decision logic
+│   │   ├── pii_detector.dart             # Client-side PII detection
+│   │   ├── on_device/
+│   │   │   ├── local_ai_provider.dart    # flutter_local_ai wrapper
+│   │   │   └── on_device_config.dart     # On-device settings
+│   │   ├── backend/
+│   │   │   ├── mcp_client.dart           # Backend API client
+│   │   │   ├── mcp_auth.dart             # JWT handling
+│   │   │   └── mcp_models.dart           # Request/response models
 │   │   └── models/
-│   │       ├── mcp_request.dart
-│   │       └── mcp_response.dart
+│   │       ├── llm_request.dart
+│   │       ├── llm_response.dart
+│   │       └── privacy_level.dart
 ```
 
-> **Note:** `local_ai_provider.dart` wraps `flutter_local_ai` and handles both iOS (Apple Foundation Models) and Android (ML Kit GenAI) through a single implementation. No platform-specific provider code needed.
-
-### 4.8 flutter_local_ai Integration
-
-The `flutter_local_ai` package provides unified on-device LLM access. Here's how it integrates with the MCP Server:
-
-#### 4.8.1 LocalAiProvider Implementation
+#### 4.8.2 On-Device Provider (flutter_local_ai)
 
 ```dart
-// lib/core/mcp/providers/local_ai_provider.dart
+// lib/core/llm/on_device/local_ai_provider.dart
 
 import 'package:flutter_local_ai/flutter_local_ai.dart';
 
-class LocalAiProvider implements LlmProvider {
+class LocalAiProvider {
   final FlutterLocalAi _localAi = FlutterLocalAi.instance;
   bool _initialized = false;
+  bool _available = false;
 
-  @override
-  String get providerId => 'local_ai';
+  Future<void> initialize() async {
+    if (_initialized) return;
 
-  @override
-  ProviderType get type => ProviderType.onDevice;
-
-  @override
-  Future<bool> isAvailable() async {
-    if (!_initialized) {
+    try {
       await _localAi.initialize();
+      _available = await _localAi.isAvailable();
+      _initialized = true;
+    } catch (e) {
+      _available = false;
       _initialized = true;
     }
-    return await _localAi.isAvailable();
   }
 
-  @override
+  bool get isAvailable => _available;
+
   Future<LlmResponse> generate(LlmRequest request) async {
-    final response = await _localAi.generateText(
-      prompt: request.prompt,
-      // Note: streaming not yet supported in flutter_local_ai
-    );
+    if (!_available) {
+      throw LlmException(code: 'NOT_AVAILABLE', message: 'On-device LLM not available');
+    }
+
+    final response = await _localAi.generateText(prompt: request.prompt);
 
     return LlmResponse(
       text: response.text,
-      provider: providerId,
+      provider: 'on_device',
+      model: Platform.isIOS ? 'apple_foundation_models' : 'ml_kit_genai',
       isOnDevice: true,
+      usage: LlmUsage(promptTokens: 0, completionTokens: 0), // On-device doesn't track
     );
   }
+}
+```
 
-  // Pseudo-streaming until native streaming is available
-  @override
+#### 4.8.3 Backend MCP Client
+
+```dart
+// lib/core/llm/backend/mcp_client.dart
+
+class BackendMcpClient {
+  final Dio _dio;
+  final McpAuth _auth;
+  final String _baseUrl;
+
+  BackendMcpClient({
+    required String baseUrl,
+    required McpAuth auth,
+  })  : _baseUrl = baseUrl,
+        _auth = auth,
+        _dio = Dio(BaseOptions(
+          baseUrl: baseUrl,
+          connectTimeout: Duration(seconds: 30),
+          receiveTimeout: Duration(seconds: 60),
+        ));
+
+  Future<LlmResponse> generate(LlmRequest request) async {
+    final token = await _auth.getAccessToken();
+
+    final response = await _dio.post(
+      '/api/v1/llm/generate',
+      data: request.toJson(),
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+
+    return LlmResponse.fromJson(response.data);
+  }
+
   Stream<LlmChunk> generateStream(LlmRequest request) async* {
-    final response = await generate(request);
+    final token = await _auth.getAccessToken();
 
-    // Simulate streaming by chunking the response
-    final words = response.text.split(' ');
-    for (int i = 0; i < words.length; i++) {
-      yield LlmChunk(
-        text: words[i] + (i < words.length - 1 ? ' ' : ''),
-        isDone: i == words.length - 1,
-        provider: providerId,
-      );
-      await Future.delayed(Duration(milliseconds: 30)); // Simulate typing
+    final response = await _dio.post(
+      '/api/v1/llm/generate/stream',
+      data: request.toJson(),
+      options: Options(
+        headers: {'Authorization': 'Bearer $token'},
+        responseType: ResponseType.stream,
+      ),
+    );
+
+    await for (final chunk in response.data.stream) {
+      final lines = utf8.decode(chunk).split('\n');
+      for (final line in lines) {
+        if (line.startsWith('data: ')) {
+          final json = jsonDecode(line.substring(6));
+          yield LlmChunk.fromJson(json);
+        }
+      }
     }
   }
 }
 ```
 
-#### 4.8.2 Platform Requirements
+### 4.9 Backend Implementation Notes
 
-| Platform | Requirement | Error Handling |
-|---|---|---|
-| **iOS** | iOS 26.0+, Apple Intelligence enabled | `isAvailable()` returns false; MCP routes to fallback |
-| **Android** | API 26+, Google AICore installed | Error -101 indicates missing AICore; prompt user or fallback |
-| **Windows** | Copilot+ PC with 40+ TOPS NPU | `isAvailable()` returns false; fallback to cloud |
+The Backend MCP Server is a separate deployable service. Recommended stack:
 
-#### 4.8.3 Initialization Flow
+| Component | Technology Options |
+|---|---|
+| **Language** | Python (FastAPI), Node.js (Express), Go |
+| **API Gateway** | Kong, AWS API Gateway, Azure API Management |
+| **Authentication** | Auth0, Keycloak, AWS Cognito |
+| **Caching** | Redis, Memcached |
+| **Logging** | ELK Stack, Datadog, CloudWatch |
+| **Database** | PostgreSQL (usage tracking), Redis (sessions) |
+| **Deployment** | Kubernetes, AWS ECS, Azure Container Apps |
 
-```dart
-// In app startup (main.dart or locator.dart)
+> **Note:** Backend MCP Server implementation details are outside the scope of this Flutter PoC PRD. A separate Backend PRD should be created for the server-side components.
 
-Future<void> initializeMcpProviders() async {
-  final localAiProvider = LocalAiProvider();
+### 4.10 Integration Summary
 
-  // Check availability and register
-  if (await localAiProvider.isAvailable()) {
-    mcpServer.registerProvider(localAiProvider, priority: 1); // Highest priority
-    print('On-device LLM available');
-  } else {
-    print('On-device LLM not available, will use fallback');
-  }
-
-  // Register fallback providers
-  mcpServer.registerProvider(OllamaProvider(), priority: 2);
-  mcpServer.registerProvider(CloudApiProvider(), priority: 3);
-}
-```
-
-#### 4.8.4 Known Limitations & Workarounds
-
-| Limitation | Workaround | Status |
-|---|---|---|
-| No streaming support | Pseudo-streaming via word chunking | Implemented in provider |
-| Tool calls iOS-only | Disable tool calls on Android, use cloud for tool-heavy queries | Configuration flag |
-| AICore not pre-installed | Show user prompt to install Google AI Core from Play Store | UI flow needed |
-| iOS requires initialization | Call `initialize()` on app startup before any LLM calls | Handled in provider |
+| Query Type | Route | Provider | Data Handling |
+|---|---|---|---|
+| Contains PII | On-Device | `flutter_local_ai` | Never leaves device |
+| User privacy = maximum | On-Device | `flutter_local_ai` | Never leaves device |
+| User privacy = high, on-device available | On-Device | `flutter_local_ai` | Never leaves device |
+| User privacy = high, on-device unavailable | Reject | — | User notified |
+| General query, no PII | Backend | OpenAI/Anthropic/Ollama | Encrypted to backend |
+| Offline mode | On-Device | `flutter_local_ai` | Never leaves device |
 
 ---
 
@@ -1585,38 +1807,441 @@ The following are explicitly excluded from this proof of concept to prevent scop
 
 ---
 
-## 13. Suggested PoC Milestones
+## 13. Implementation Plan
 
-| Milestone | Deliverable | Key Features | Est. Duration |
+The implementation is structured in **3 phases** to enable early demos with on-device LLM, while deferring the complex Backend MCP Server to the final phase.
+
+### Implementation Philosophy
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        IMPLEMENTATION PHASES                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  PHASE 1: Core App + On-Device LLM (Demo Ready)                            │
+│  ════════════════════════════════════════════════                           │
+│  • Foundation, Hub, Banking screens                                         │
+│  • On-device LLM working (flutter_local_ai)                                │
+│  • Basic chat with on-device responses                                      │
+│  • ✅ DEMO: "Look, AI chat works completely offline!"                       │
+│                                                                              │
+│  PHASE 2: Voice & Polish (Enhanced Demo)                                    │
+│  ════════════════════════════════════════                                   │
+│  • Voice assistants (Siri, Google Assistant)                               │
+│  • Speech services (STT/TTS)                                               │
+│  • Full chat experience with voice                                          │
+│  • ✅ DEMO: "Hey Siri, show my balance" + voice chat                        │
+│                                                                              │
+│  PHASE 3: Enterprise Backend (Production Ready)                             │
+│  ══════════════════════════════════════════════                             │
+│  • Backend MCP Server                                                       │
+│  • Cloud LLM fallback                                                       │
+│  • Enterprise logging, analytics                                            │
+│  • ✅ PRODUCTION: Full hybrid architecture                                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Phase 1: Core App + On-Device LLM
+
+**Goal:** Demo-ready app with working on-device AI chat
+
+**Duration:** ~5.5 weeks
+
+#### M1 — Foundation (1 week)
+
+| Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M1 — Foundation | Buildable shell app | clean_framework setup, go_router, locator.dart, auth flow with biometric | 1 week |
-| M2 — Hub | Adaptive hub running | HubProfileResolver, all 4 hub layouts, accessibility switching, chat FAB | 1.5 weeks |
-| M3 — Banking | All 5 banking screens | Balance, Transfer, Transactions, Pay Bills, Cards — all mock data | 2 weeks |
-| M4 — Voice Assistants | Siri + App Actions | `flutter_app_intents` setup, `app_links` deep linking, intent registration, auth gate | 1 week |
-| M5 — Speech Services | STT/TTS abstraction | `SttService` and `TtsService` interfaces, on-device implementations, DI setup | 0.5 weeks |
-| M6 — MCP Server | LLM abstraction layer | MCP protocol, embedded server, `flutter_local_ai` integration (LocalAiProvider), capability detection | 1 week |
-| M7 — MCP Providers | Extended provider support | Ollama integration, cloud API fallback (OpenAI/Anthropic), privacy routing, pseudo-streaming | 1 week |
-| M8 — Chat Integration | MCP-powered chat | Chat UI with Speech Services (STT/TTS), MCP responses, privacy indicators, fallback consent | 1 week |
-| M9 — Polish | Demo-ready build | Error states, loading states, accessibility audit, performance pass | 1 week |
+| M1.1 | Project setup | Create Flutter project, configure `pubspec.yaml`, set up folder structure | Must Have |
+| M1.2 | clean_framework setup | Install and configure clean_framework 0.4.2, create base classes | Must Have |
+| M1.3 | Routing setup | Configure go_router with route definitions, deep link support | Must Have |
+| M1.4 | DI setup | Create `locator.dart` with Provider registrations | Must Have |
+| M1.5 | Theme setup | Create `app_theme.dart`, color tokens, typography | Must Have |
+| M1.6 | Biometric auth | Implement `local_auth` for Face ID / Fingerprint | Must Have |
+| M1.7 | PIN fallback | Implement 6-digit PIN entry with secure storage | Must Have |
+| M1.8 | Auth gate | Create route guard for protected screens | Must Have |
+| M1.9 | Session management | Implement token storage, session timeout | Should Have |
 
-**Total estimated duration: ~10 weeks for a single Flutter developer.**
+**M1 Deliverable:** App launches, user can authenticate with biometric/PIN
 
-> **Notes:**
-> - Using `flutter_local_ai` reduces M6 duration — no custom native code for on-device LLM
-> - Using `flutter_app_intents` reduces M4 duration — unified API for voice assistants, intents defined in Dart
+---
+
+#### M2 — Adaptive Hub (1.5 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M2.1 | Hub profile entity | Create `HubProfileEntity` with accessibility flags | Must Have |
+| M2.2 | Profile resolver | Implement `HubProfileResolver` reading MediaQuery flags | Must Have |
+| M2.3 | Hub widget factory | Create factory pattern for layout selection | Must Have |
+| M2.4 | Standard hub layout | 3-column grid with balance card, quick actions, transactions | Must Have |
+| M2.5 | Assistive hub layout | Single column, full-width buttons, semantic labels | Must Have |
+| M2.6 | Large text hub layout | 2-column grid, larger tiles, 18sp+ text | Must Have |
+| M2.7 | Color-blind hub layout | Adjusted palette, pattern indicators | Must Have |
+| M2.8 | Live re-resolution | Hub rebuilds when accessibility settings change | Must Have |
+| M2.9 | Chat FAB | Floating action button on all hub layouts | Must Have |
+| M2.10 | Hub animations | Entry animations (respecting reduce motion) | Should Have |
+
+**M2 Deliverable:** Hub screen adapts to accessibility settings in real-time
+
+---
+
+#### M3 — Banking Screens (2 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M3.1 | Mock data service | Create JSON mock data for all banking features | Must Have |
+| M3.2 | Balance screen | Account summary, balance display, hide/show toggle | Must Have |
+| M3.3 | Balance bloc | UseCase and ServiceAdapter for balance data | Must Have |
+| M3.4 | Transfer screen | Payee selector, amount input, confirmation flow | Must Have |
+| M3.5 | Transfer bloc | UseCase for transfer validation and execution | Must Have |
+| M3.6 | Transactions screen | Paginated list, filters, transaction detail sheet | Must Have |
+| M3.7 | Transactions bloc | UseCase with filtering and pagination | Must Have |
+| M3.8 | Pay bills screen | Biller list, amount, date selection, confirmation | Must Have |
+| M3.9 | Pay bills bloc | UseCase for bill payment flow | Must Have |
+| M3.10 | Cards screen | Card list, freeze/unfreeze, card number reveal | Must Have |
+| M3.11 | Cards bloc | UseCase for card management | Must Have |
+| M3.12 | Deep link handling | Pre-fill screens from deep link parameters | Should Have |
+
+**M3 Deliverable:** All 5 banking screens functional with mock data
+
+---
+
+#### M4 — On-Device LLM (1 week) ⭐ KEY DEMO MILESTONE
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M4.1 | flutter_local_ai setup | Add package, configure iOS/Android requirements | Must Have |
+| M4.2 | LLM service interface | Create abstract `LlmService` interface | Must Have |
+| M4.3 | On-device provider | Implement `OnDeviceLlmProvider` wrapping flutter_local_ai | Must Have |
+| M4.4 | Availability detection | Check and cache on-device LLM availability at startup | Must Have |
+| M4.5 | Simple chat UI | Basic chat screen with text input and message list | Must Have |
+| M4.6 | Chat bloc | UseCase for chat message handling | Must Have |
+| M4.7 | Message bubbles | User and assistant message bubble widgets | Must Have |
+| M4.8 | Typing indicator | Show indicator while LLM is generating | Must Have |
+| M4.9 | Error handling | Graceful error display if LLM unavailable | Must Have |
+| M4.10 | Privacy indicator | "On-device" badge showing data stays local | Must Have |
+| M4.11 | Conversation context | Maintain last 10 messages as context | Should Have |
+
+**M4 Deliverable:** ✅ **DEMO READY** — Chat works with on-device LLM, completely offline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PHASE 1 DEMO CHECKPOINT                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ✅ App launches with biometric authentication                   │
+│  ✅ Adaptive hub adjusts to accessibility settings               │
+│  ✅ All banking screens work with mock data                      │
+│  ✅ Chat works with ON-DEVICE LLM (no internet required!)        │
+│  ✅ Privacy indicator shows "Responses generated on device"      │
+│                                                                  │
+│  Demo talking points:                                            │
+│  • "Put your phone in airplane mode — chat still works"         │
+│  • "Your financial questions never leave your device"           │
+│  • "Turn on VoiceOver — watch the hub transform"                │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Phase 2: Voice & Enhanced Experience
+
+**Goal:** Voice assistant integration and polished chat experience
+
+**Duration:** ~3 weeks
+
+#### M5 — Voice Assistants (1 week)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M5.1 | flutter_app_intents setup | Add package, configure iOS entitlements | Must Have |
+| M5.2 | Banking intents | Register ShowBalance, Transfer, PayBills, Cards intents | Must Have |
+| M5.3 | Intent handlers | Handle intent callbacks, extract parameters | Must Have |
+| M5.4 | app_links setup | Configure deep link handling for both platforms | Must Have |
+| M5.5 | Deep link router | Parse incoming URIs, route to correct screen | Must Have |
+| M5.6 | Auth gate for intents | Require auth before deep link navigation | Must Have |
+| M5.7 | Siri testing | Test all voice commands on iOS device | Must Have |
+| M5.8 | Shortcuts donation | Donate user actions for Siri suggestions | Should Have |
+| M5.9 | Spotlight indexing | Index banking actions for Spotlight search | Should Have |
+| M5.10 | Android App Actions | Configure shortcuts.xml (when flutter_app_intents supports) | Should Have |
+
+**M5 Deliverable:** "Hey Siri, show my balance in BankApp" works
+
+---
+
+#### M6 — Speech Services (0.5 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M6.1 | SttService interface | Create abstract STT interface | Must Have |
+| M6.2 | TtsService interface | Create abstract TTS interface | Must Have |
+| M6.3 | On-device STT | Implement using `speech_to_text` package | Must Have |
+| M6.4 | On-device TTS | Implement using `flutter_tts` package | Must Have |
+| M6.5 | Service registration | Register services in locator.dart | Must Have |
+| M6.6 | Voice input button | Add mic button to chat input | Must Have |
+| M6.7 | Voice output toggle | Add option to read responses aloud | Should Have |
+
+**M6 Deliverable:** Chat supports voice input and output
+
+---
+
+#### M7 — Enhanced Chat (1 week)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M7.1 | Voice mode UI | Full voice conversation mode with waveform | Should Have |
+| M7.2 | Quick suggestions | Suggested questions based on context | Should Have |
+| M7.3 | Rich responses | Format responses with cards, lists, actions | Should Have |
+| M7.4 | Chat history | Persist chat history locally | Should Have |
+| M7.5 | Clear conversation | Option to clear chat history | Must Have |
+| M7.6 | Accessibility labels | Full VoiceOver/TalkBack support for chat | Must Have |
+| M7.7 | Keyboard handling | Proper keyboard avoidance, dismiss on scroll | Must Have |
+
+**M7 Deliverable:** Polished chat experience with voice support
+
+---
+
+#### M8 — Polish (0.5 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M8.1 | Loading states | Shimmer placeholders for all screens | Must Have |
+| M8.2 | Error states | Error screens with retry actions | Must Have |
+| M8.3 | Empty states | Friendly empty state illustrations | Should Have |
+| M8.4 | Pull to refresh | Refresh gesture on list screens | Should Have |
+| M8.5 | Haptic feedback | Tactile feedback for actions | Should Have |
+| M8.6 | Accessibility audit | Test with VoiceOver/TalkBack, fix issues | Must Have |
+| M8.7 | Performance pass | Profile and optimize slow screens | Must Have |
+
+**M8 Deliverable:** ✅ **ENHANCED DEMO READY** — Full experience without backend
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PHASE 2 DEMO CHECKPOINT                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Everything from Phase 1, PLUS:                                  │
+│                                                                  │
+│  ✅ "Hey Siri, show my balance" → app opens to balance           │
+│  ✅ Voice input for chat (tap mic, speak, see transcription)    │
+│  ✅ Voice output (assistant reads responses aloud)               │
+│  ✅ Polished UI with loading states, error handling              │
+│  ✅ Full accessibility support verified                          │
+│                                                                  │
+│  Demo talking points:                                            │
+│  • "Hey Siri, transfer money in BankApp" (hands-free banking)   │
+│  • Tap mic → "What's my balance?" → hear response               │
+│  • Still works offline with on-device LLM                        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Phase 3: Enterprise Backend (Production)
+
+**Goal:** Full hybrid architecture with backend MCP server
+
+**Duration:** ~3.5 weeks (Flutter) + ~5 weeks (Backend, parallel)
+
+#### M9 — Local LLM Router (1 week)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M9.1 | Router interface | Create `LlmRouter` interface for routing decisions | Must Have |
+| M9.2 | PII detector | Implement regex-based PII detection | Must Have |
+| M9.3 | Privacy settings | Add privacy level setting to user preferences | Must Have |
+| M9.4 | Routing logic | Implement decision matrix (PII → on-device, etc.) | Must Have |
+| M9.5 | Router integration | Replace direct LLM calls with router | Must Have |
+| M9.6 | Fallback handling | Handle case when on-device unavailable | Must Have |
+| M9.7 | Routing telemetry | Log routing decisions locally (for debugging) | Should Have |
+
+**M9 Deliverable:** Smart routing based on PII and privacy settings
+
+---
+
+#### M10 — Backend MCP Client (1.5 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M10.1 | API client setup | Create Dio-based HTTP client with interceptors | Must Have |
+| M10.2 | Auth integration | JWT token handling, refresh flow | Must Have |
+| M10.3 | Generate endpoint | Implement `/api/v1/llm/generate` call | Must Have |
+| M10.4 | Streaming support | Implement SSE streaming for `/generate/stream` | Must Have |
+| M10.5 | Error handling | Map API errors to user-friendly messages | Must Have |
+| M10.6 | Retry logic | Exponential backoff for transient failures | Must Have |
+| M10.7 | Offline detection | Detect offline, route to on-device only | Must Have |
+| M10.8 | Provider display | Show which provider responded (on-device/cloud) | Must Have |
+| M10.9 | Timeout handling | Configurable timeouts, cancel long requests | Should Have |
+
+**M10 Deliverable:** App can call backend MCP server for cloud LLM
+
+---
+
+#### M11 — Hybrid Integration (1 week)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M11.1 | Full router integration | Connect PII detector + backend client + on-device | Must Have |
+| M11.2 | Fallback consent | Prompt user before first cloud fallback | Must Have |
+| M11.3 | Provider indicator | Dynamic UI showing "On-device" vs "Cloud" | Must Have |
+| M11.4 | Offline graceful | Seamless switch to on-device when offline | Must Have |
+| M11.5 | Settings UI | Privacy level picker in settings screen | Must Have |
+| M11.6 | Usage display | Show LLM usage stats in settings (optional) | Could Have |
+| M11.7 | End-to-end testing | Test all routing scenarios | Must Have |
+
+**M11 Deliverable:** ✅ **PRODUCTION READY** — Full hybrid LLM architecture
+
+---
+
+### Backend MCP Server Tasks (Parallel Track)
+
+**Note:** These tasks are for the backend team, running in parallel with Flutter development.
+
+#### B1 — Infrastructure (1.5 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| B1.1 | Project setup | Initialize backend project (FastAPI/Node/Go) | Must Have |
+| B1.2 | API Gateway | Configure Kong/AWS API Gateway | Must Have |
+| B1.3 | Auth service | JWT validation, user context extraction | Must Have |
+| B1.4 | Health endpoints | `/health`, `/ready` endpoints | Must Have |
+| B1.5 | Docker setup | Containerize for deployment | Must Have |
+| B1.6 | CI/CD pipeline | Automated build, test, deploy | Must Have |
+| B1.7 | Staging environment | Deploy to staging for testing | Must Have |
+
+---
+
+#### B2 — Provider Integration (1.5 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| B2.1 | Provider interface | Abstract provider interface | Must Have |
+| B2.2 | OpenAI provider | Integrate OpenAI API (GPT-4, GPT-3.5) | Must Have |
+| B2.3 | Anthropic provider | Integrate Anthropic API (Claude) | Should Have |
+| B2.4 | Ollama provider | Integrate self-hosted Ollama | Should Have |
+| B2.5 | Streaming implementation | SSE streaming for all providers | Must Have |
+| B2.6 | Provider routing | Select provider based on request | Must Have |
+| B2.7 | Fallback chain | Auto-failover between providers | Must Have |
+
+---
+
+#### B3 — Enterprise Services (1 week)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| B3.1 | Audit logging | Log all requests/responses with correlation IDs | Must Have |
+| B3.2 | Usage tracking | Track tokens, costs per user | Must Have |
+| B3.3 | Rate limiting | Per-user, per-tier rate limits | Must Have |
+| B3.4 | Analytics endpoints | Expose usage stats via API | Should Have |
+| B3.5 | Dashboard | Basic admin dashboard for monitoring | Could Have |
+
+---
+
+#### B4 — Security Hardening (1 week)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| B4.1 | PII scrubbing | Final PII scan before external API calls | Must Have |
+| B4.2 | Input validation | Validate and sanitize all inputs | Must Have |
+| B4.3 | Prompt injection protection | Detect and block injection attempts | Must Have |
+| B4.4 | Secrets management | Secure API key storage (Vault, etc.) | Must Have |
+| B4.5 | Penetration testing | Security audit of API | Should Have |
+
+---
+
+### Implementation Timeline
+
+```
+Week  1   2   3   4   5   6   7   8   9   10  11  12  13  14  15
+      ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+      │                                                         │
+      │  PHASE 1: Core App + On-Device LLM                     │
+      │  ══════════════════════════════════                     │
+      │  M1 ████                                                │
+      │  M2     ██████                                          │
+      │  M3           ████████                                  │
+      │  M4                   ████  ← DEMO 1 (On-device AI)    │
+      │                                                         │
+      │  PHASE 2: Voice & Polish                                │
+      │  ═══════════════════════                                │
+      │  M5                       ████                          │
+      │  M6                           ██                        │
+      │  M7                             ████                    │
+      │  M8                                 ██ ← DEMO 2 (Voice) │
+      │                                                         │
+      │  PHASE 3: Enterprise Backend                            │
+      │  ═══════════════════════════                            │
+      │  M9                                     ████            │
+      │  M10                                        ██████      │
+      │  M11                                              ████  │
+      │                                                    ↑    │
+      │                                            PRODUCTION   │
+      │                                                         │
+      │  BACKEND (Parallel)                                     │
+      │  ══════════════════                                     │
+      │  B1         ██████                                      │
+      │  B2               ██████                                │
+      │  B3                     ████                            │
+      │  B4                         ████                        │
+      │                                                         │
+      └─────────────────────────────────────────────────────────┘
+
+LEGEND:
+████ = Development period
+← = Demo checkpoint
+```
+
+### Demo Checkpoints Summary
+
+| Demo | When | What Works | Key Talking Points |
+|---|---|---|---|
+| **Demo 1** | Week 5.5 | On-device LLM chat | "AI chat works in airplane mode, data never leaves device" |
+| **Demo 2** | Week 8.5 | Voice + Polish | "Hey Siri, show my balance" + voice chat |
+| **Production** | Week 12 | Full hybrid | Enterprise-ready with cloud fallback, audit logging |
+
+### Resource Requirements
+
+| Role | Phase 1 | Phase 2 | Phase 3 | Total |
+|---|---|---|---|---|
+| Flutter Developer | 5.5 weeks | 3 weeks | 3.5 weeks | 12 weeks |
+| Backend Developer | — | — | 5 weeks | 5 weeks |
+| QA Engineer | 0.5 weeks | 0.5 weeks | 1 week | 2 weeks |
+| Designer (support) | As needed | As needed | — | — |
+
+> **Note:** Backend development (B1-B4) can run **in parallel** with Flutter Phase 2 and Phase 3, reducing total calendar time.
 
 ---
 
 ## 14. Open Questions
 
+### Client-Side Questions
+
 | Question | Impact if Unresolved |
 |---|---|
-| Minimum iOS version: 16 or 26? | `flutter_local_ai` requires iOS 26+ for on-device LLM. iOS 16-25 users will fallback to Ollama or cloud. |
-| Android AICore availability? | `flutter_local_ai` requires Google AICore. Devices without AICore will fallback to Ollama or cloud. |
+| Minimum iOS version: 16 or 26? | `flutter_local_ai` requires iOS 26+ for on-device LLM. iOS 16-25 users will fallback to backend. |
+| Android AICore availability? | `flutter_local_ai` requires Google AICore. Devices without AICore will fallback to backend. |
 | `flutter_local_ai` streaming timeline? | Package currently lacks streaming. Monitor for updates or implement polling-based pseudo-streaming. |
 | Custom Siri wake phrase approved? | "Hey Siri, [action] in BankApp" requires App Intent donation. Marketing approval may be needed. |
 | `flutter_app_intents` Android release? | Android App Actions support is in development. Track package releases for availability. |
 | Color blindness: user-set or auto-detect? | iOS/Android have no API for color blindness type. User-set is the only reliable path — confirms UX decision. |
+| Default privacy level? | Should default be `high` (prefer on-device) or `standard` (allow backend)? Affects first-run UX. |
+
+### Backend MCP Server Questions
+
+| Question | Impact if Unresolved |
+|---|---|
+| Backend technology stack? | Python (FastAPI), Node.js, or Go? Affects team skills and hiring. |
+| Cloud provider for hosting? | AWS, Azure, or GCP? Affects architecture, compliance, and costs. |
+| Primary cloud LLM provider? | OpenAI, Anthropic, or Azure OpenAI? Affects API integration and costs. |
+| Self-hosted Ollama? | Should Ollama run on backend infrastructure for high-privacy fallback? |
+| Authentication provider? | Auth0, Keycloak, or cloud-native (Cognito, Azure AD)? Affects integration. |
+| Data residency requirements? | Which regions must data stay in? Affects deployment architecture. |
+| Logging/SIEM integration? | Which enterprise logging platform? (Splunk, Datadog, ELK) |
+| Usage billing model? | Per-token, per-request, or subscription? Affects usage tracking design. |
 | Backend API contract available? | Knowing the real API shape lets mock responses be designed without re-work later. |
 | Is Assistive Access (iOS) in scope? | Assistive Access replaces the entire UI — a separate Flutter entry point may be required. |
 | MCP Server deployment mode for production? | Embedded mode works for PoC. Production may need daemon mode for Ollama or remote mode for enterprise. |
