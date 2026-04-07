@@ -2536,19 +2536,95 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 
 #### M3 — On-Device LLM (1 week) ⭐ KEY DEMO MILESTONE
 
+**Architecture: Provider-Agnostic LLM Abstraction**
+
+The LLM integration uses a provider pattern with an abstract interface, allowing easy swapping of the underlying LLM package (flutter_local_ai → other packages) without changing the rest of the app.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Chat Feature                            │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐  │
+│  │  Chat UI    │───▶│  Chat Bloc  │───▶│  LlmService     │  │
+│  │  (Screen)   │    │  (UseCase)  │    │  (Abstract)     │  │
+│  └─────────────┘    └─────────────┘    └────────┬────────┘  │
+│                                                  │           │
+│                          ┌───────────────────────┼─────┐     │
+│                          ▼                       ▼     ▼     │
+│              ┌──────────────────┐  ┌─────────┐  ┌─────────┐  │
+│              │ OnDeviceLlmProvider│  │ Cloud   │  │ Mock    │  │
+│              │ (flutter_local_ai) │  │ Provider│  │ Provider│  │
+│              └──────────────────┘  └─────────┘  └─────────┘  │
+│                          │                                   │
+│                          ▼                                   │
+│              ┌──────────────────┐                            │
+│              │ flutter_local_ai │  ◀── Can swap to other     │
+│              │    (Package)     │      package later         │
+│              └──────────────────┘                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
 | M3.1 | flutter_local_ai setup | Add package, configure iOS/Android requirements | Must Have |
-| M3.2 | LLM service interface | Create abstract `LlmService` interface | Must Have |
-| M3.3 | On-device provider | Implement `OnDeviceLlmProvider` wrapping flutter_local_ai | Must Have |
-| M3.4 | Availability detection | Check and cache on-device LLM availability at startup | Must Have |
-| M3.5 | Simple chat UI | Basic chat screen with text input and message list | Must Have |
-| M3.6 | Chat bloc | UseCase for chat message handling | Must Have |
-| M3.7 | Message bubbles | User and assistant message bubble widgets | Must Have |
-| M3.8 | Typing indicator | Show indicator while LLM is generating | Must Have |
-| M3.9 | Error handling | Graceful error display if LLM unavailable | Must Have |
-| M3.10 | Privacy indicator | "On-device" badge showing data stays local | Must Have |
-| M3.11 | Conversation context | Maintain last 10 messages as context | Should Have |
+| M3.2 | **LlmService interface** | Create abstract `LlmService` with `generateResponse()`, `streamResponse()`, `isAvailable()`, `getProviderInfo()` | Must Have |
+| M3.3 | **LlmProvider base** | Create `LlmProvider` abstract class with common functionality (context management, error handling) | Must Have |
+| M3.4 | **OnDeviceLlmProvider** | Implement provider wrapping flutter_local_ai; isolates package-specific code | Must Have |
+| M3.5 | **MockLlmProvider** | Test/demo provider with canned responses for development | Should Have |
+| M3.6 | Availability detection | Check and cache on-device LLM availability at startup | Must Have |
+| M3.7 | Provider registration | Register providers in locator with fallback chain | Must Have |
+| M3.8 | Simple chat UI | Basic chat screen with text input and message list | Must Have |
+| M3.9 | Chat bloc | UseCase for chat message handling | Must Have |
+| M3.10 | Message bubbles | User and assistant message bubble widgets | Must Have |
+| M3.11 | Typing indicator | Show indicator while LLM is generating | Must Have |
+| M3.12 | Error handling | Graceful error display if LLM unavailable | Must Have |
+| M3.13 | Privacy indicator | "On-device" badge showing data stays local | Must Have |
+| M3.14 | Conversation context | Maintain last 10 messages as context | Should Have |
+
+**LLM Service Interface (lib/core/llm/llm_service.dart):**
+
+```dart
+/// Abstract LLM service interface - provider agnostic
+/// Swap implementations without changing app code
+abstract class LlmService {
+  /// Check if this LLM provider is available
+  Future<bool> isAvailable();
+
+  /// Get provider info (name, type, privacy level)
+  LlmProviderInfo get providerInfo;
+
+  /// Generate a complete response (non-streaming)
+  Future<LlmResponse> generateResponse(LlmRequest request);
+
+  /// Stream response tokens as they're generated
+  Stream<String> streamResponse(LlmRequest request);
+
+  /// Dispose resources
+  void dispose();
+}
+
+/// Provider info for UI display
+class LlmProviderInfo {
+  final String name;           // "On-Device AI", "Cloud AI"
+  final LlmProviderType type;  // onDevice, cloud, hybrid
+  final bool isPrivate;        // true = data stays on device
+  final String? modelName;     // "Gemma 2B", "GPT-4", etc.
+}
+
+enum LlmProviderType { onDevice, cloud, hybrid }
+```
+
+**Provider Swap Example:**
+
+```dart
+// Current: flutter_local_ai
+final llmService = OnDeviceLlmProvider();
+
+// Future swap options (no app code changes needed):
+// final llmService = OllamaProvider();        // Local Ollama
+// final llmService = MLKitProvider();         // Google ML Kit
+// final llmService = OpenAIProvider();        // Cloud fallback
+// final llmService = HybridProvider();        // On-device + cloud
+```
 
 **M3 Deliverable:** ✅ **DEMO READY** — Chat works with on-device LLM, completely offline
 
