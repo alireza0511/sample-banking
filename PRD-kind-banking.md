@@ -2458,23 +2458,25 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 
 #### M1 — Foundation (1 week)
 
-| Task ID | Task | Description | Priority |
-|---|---|---|---|
-| M1.1 | Project setup | Create Flutter project, configure `pubspec.yaml`, set up folder structure | Must Have |
-| M1.2 | clean_framework setup | Install and configure clean_framework 0.4.2, create base classes | Must Have |
-| M1.3 | Routing setup | Configure go_router with route definitions, deep link support | Must Have |
-| M1.4 | DI setup | Create `locator.dart` with Provider registrations | Must Have |
-| M1.5 | Theme setup | Create `app_theme.dart`, color tokens, typography | Must Have |
-| M1.6 | **Mockoon setup** | Create Mockoon environment files, configure endpoints, test connection | Must Have |
-| M1.7 | **Environment config** | Create `AppConfig` with dev/staging/prod base URLs | Must Have |
-| M1.8 | **API client** | Create `http`-based API client with Mockoon integration (compatible with clean_framework) | Must Have |
-| M1.9 | **Simple login screen** | Username/password form, calls Mockoon `/auth/login` | Must Have |
-| M1.10 | **Auth state management** | Store auth token, isAuthenticated flag, user info | Must Have |
-| M1.11 | **Auth gate** | Route guard redirects to login if not authenticated | Must Have |
-| M1.12 | **Logout flow** | Clear auth state, redirect to login screen | Must Have |
-| M1.13 | **Dev shortcuts** | Quick login button for testing (dev mode only) | Should Have |
+| Task ID | Task | Description | Priority | Status |
+|---|---|---|---|---|
+| M1.1 | Project setup | Create Flutter project, configure `pubspec.yaml`, set up folder structure | Must Have | ✅ Done |
+| M1.2 | clean_framework setup | Install and configure clean_framework 0.4.2, create base classes | Must Have | ✅ Done |
+| M1.3 | Routing setup | Configure go_router with route definitions, deep link support | Must Have | ✅ Done |
+| M1.4 | DI setup | Create `locator.dart` with Provider registrations | Must Have | ✅ Done |
+| M1.5 | Theme setup | Create `app_theme.dart`, color tokens, typography | Must Have | ✅ Done |
+| M1.6 | **Mockoon setup** | Create Mockoon environment files, configure endpoints, test connection | Must Have | ✅ Done |
+| M1.7 | **Environment config** | Create `AppConfig` with dev/staging/prod base URLs | Must Have | ✅ Done |
+| M1.8 | **API client** | Create `http`-based API client with Mockoon integration (compatible with clean_framework) | Must Have | ✅ Done |
+| M1.9 | **Simple login screen** | Username/password form, calls Mockoon `/auth/login` | Must Have | ✅ Done |
+| M1.10 | **Auth state management** | Store auth token, isAuthenticated flag, user info | Must Have | ✅ Done |
+| M1.11 | **Auth gate** | Route guard redirects to login if not authenticated | Must Have | ✅ Done |
+| M1.12 | **Logout flow** | Clear auth state, redirect to login screen | Must Have | ✅ Done |
+| M1.13 | **Dev shortcuts** | Quick login button for testing (dev mode only) | Should Have | ✅ Done |
 
 **M1 Deliverable:** App launches with simple login, easy to test auth/non-auth states
+
+**Progress: 13/13 tasks complete** ✅
 
 > **Note:** Simple login is for development/demo. Biometric authentication and PIN fallback are added in Phase 3 (M12) for production readiness.
 
@@ -2482,24 +2484,26 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 
 #### M1b — Deep Linking (1 week) ⚡ HIGH PRIORITY
 
-Deep linking is foundational for voice assistant navigation, in-app actions, and testing. Must be completed before voice integration (M5).
+Deep linking is foundational for voice assistant navigation, in-app actions, and testing. Must be completed before voice integration (M4).
 
-| Task ID | Task | Description | Priority |
-|---|---|---|---|
-| M1b.1 | **URI scheme registration** | Configure `kindbanking://` custom scheme (iOS Info.plist, Android Manifest) | Must Have |
-| M1b.2 | **app_links integration** | Setup `app_links` package for unified deep link reception | Must Have |
-| M1b.3 | **DeepLinkHandler class** | Create central handler with URI parsing, route matching, param validation | Must Have |
-| M1b.4 | **Route registry** | Define all supported routes with parameters and auth requirements | Must Have |
-| M1b.5 | **Auth gate integration** | Intercept protected routes, redirect to login, resume after auth | Must Have |
-| M1b.6 | **Parameter sanitization** | Validate and sanitize all deep link parameters (prevent injection) | Must Have |
-| M1b.7 | **Parameter pre-fill** | Pass validated params to screens for form pre-population | Must Have |
-| M1b.8 | **Cold start handling** | Handle deep links when app is not running | Must Have |
-| M1b.9 | **Warm start handling** | Handle deep links when app is in background | Must Have |
-| M1b.10 | **Fallback behavior** | Unknown routes → hub; invalid params → screen defaults | Must Have |
-| M1b.11 | **Universal Links (iOS)** | Configure AASA file for `app.kindbanking.com` | Should Have |
-| M1b.12 | **App Links (Android)** | Configure asset links for `app.kindbanking.com` | Should Have |
-| M1b.13 | **Deep link test harness** | Dev screen to test all deep link routes manually | Should Have |
-| M1b.14 | **In-app navigation** | Internal navigation uses deep link system (consistency) | Should Have |
+| Task ID | Task | Description | Priority | Status |
+|---|---|---|---|---|
+| M1b.1 | **URI scheme registration** | Configure `kindbanking://` custom scheme (iOS Info.plist, Android Manifest) | Must Have | |
+| M1b.2 | **app_links integration** | Setup `app_links` package for unified deep link reception | Must Have | |
+| M1b.3 | **DeepLinkHandler class** | Create central handler with URI parsing, route matching, param validation | Must Have | ✅ Done |
+| M1b.4 | **Route registry** | Define all supported routes with parameters and auth requirements | Must Have | ✅ Done |
+| M1b.5 | **Auth gate integration** | Intercept protected routes, redirect to login, resume after auth | Must Have | ✅ Done |
+| M1b.6 | **Parameter sanitization** | Validate and sanitize all deep link parameters (prevent injection) | Must Have | ✅ Done |
+| M1b.7 | **Parameter pre-fill** | Pass validated params to screens for form pre-population | Must Have | |
+| M1b.8 | **Cold start handling** | Handle deep links when app is not running | Must Have | |
+| M1b.9 | **Warm start handling** | Handle deep links when app is in background | Must Have | |
+| M1b.10 | **Fallback behavior** | Unknown routes → hub; invalid params → screen defaults | Must Have | ✅ Done |
+| M1b.11 | **Universal Links (iOS)** | Configure AASA file for `app.kindbanking.com` | Should Have | |
+| M1b.12 | **App Links (Android)** | Configure asset links for `app.kindbanking.com` | Should Have | |
+| M1b.13 | **Deep link test harness** | Dev screen to test all deep link routes manually | Should Have | |
+| M1b.14 | **In-app navigation** | Internal navigation uses deep link system (consistency) | Should Have | |
+
+**Progress: 5/14 tasks complete**
 
 **M1b Deliverable:** Complete deep linking infrastructure ready for voice assistant integration
 

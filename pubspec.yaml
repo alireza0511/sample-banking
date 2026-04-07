@@ -21,7 +21,8 @@ dependencies:
   # State Management & DI
   provider: ^6.1.2
 
-  # Networking (http is included via clean_framework)
+  # Networking
+  http: ^1.2.2
   # Note: Dio can be added later for advanced features like interceptors
 
   # Storage

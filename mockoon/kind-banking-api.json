@@ -1,0 +1,562 @@
+{
+  "uuid": "kind-banking-api",
+  "lastMigration": 32,
+  "name": "Kind Banking API",
+  "endpointPrefix": "api/v1",
+  "latency": 200,
+  "port": 3000,
+  "hostname": "localhost",
+  "tlsOptions": {
+    "enabled": false,
+    "type": "CERT",
+    "pfxPath": "",
+    "certPath": "",
+    "keyPath": "",
+    "caPath": "",
+    "passphrase": ""
+  },
+  "cors": true,
+  "headers": [
+    {
+      "key": "Content-Type",
+      "value": "application/json"
+    },
+    {
+      "key": "Access-Control-Allow-Origin",
+      "value": "*"
+    }
+  ],
+  "proxyMode": false,
+  "proxyHost": "",
+  "proxyRemovePrefix": false,
+  "routes": [
+    {
+      "uuid": "auth-login",
+      "documentation": "User login endpoint",
+      "method": "post",
+      "endpoint": "auth/login",
+      "responses": [
+        {
+          "uuid": "auth-login-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ1c2VyXzEyMyIsImVtYWlsIjoiam9obi5kb2VAZXhhbXBsZS5jb20iLCJpYXQiOjE2OTk5OTk5OTl9.mock_signature\",\n    \"refreshToken\": \"refresh_token_mock_12345\",\n    \"expiresIn\": 3600,\n    \"user\": {\n      \"id\": \"user_123\",\n      \"email\": \"john.doe@example.com\",\n      \"firstName\": \"John\",\n      \"lastName\": \"Doe\",\n      \"phone\": \"+1-555-123-4567\"\n    }\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "target": "body",
+              "modifier": "username",
+              "value": "demo",
+              "invert": false,
+              "operator": "equals"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id"
+        },
+        {
+          "uuid": "auth-login-invalid",
+          "body": "{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"AUTH_INVALID_CREDENTIALS\",\n    \"message\": \"Invalid username or password\"\n  }\n}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Invalid credentials",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "auth-logout",
+      "documentation": "User logout endpoint",
+      "method": "post",
+      "endpoint": "auth/logout",
+      "responses": [
+        {
+          "uuid": "auth-logout-success",
+          "body": "{\n  \"success\": true,\n  \"message\": \"Logged out successfully\"\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "accounts-list",
+      "documentation": "Get all user accounts",
+      "method": "get",
+      "endpoint": "accounts",
+      "responses": [
+        {
+          "uuid": "accounts-list-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"accounts\": [\n      {\n        \"id\": \"acc_checking_001\",\n        \"type\": \"checking\",\n        \"name\": \"Primary Checking\",\n        \"accountNumber\": \"****1234\",\n        \"balance\": 14250.50,\n        \"availableBalance\": 14150.50,\n        \"currency\": \"USD\",\n        \"isPrimary\": true\n      },\n      {\n        \"id\": \"acc_savings_001\",\n        \"type\": \"savings\",\n        \"name\": \"Emergency Fund\",\n        \"accountNumber\": \"****5678\",\n        \"balance\": 25000.00,\n        \"availableBalance\": 25000.00,\n        \"currency\": \"USD\",\n        \"isPrimary\": false\n      },\n      {\n        \"id\": \"acc_savings_002\",\n        \"type\": \"savings\",\n        \"name\": \"Vacation Fund\",\n        \"accountNumber\": \"****9012\",\n        \"balance\": 5949.50,\n        \"availableBalance\": 5949.50,\n        \"currency\": \"USD\",\n        \"isPrimary\": false\n      }\n    ],\n    \"totalBalance\": 45200.00,\n    \"netWealth\": 45200.00\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "account-detail",
+      "documentation": "Get specific account details",
+      "method": "get",
+      "endpoint": "accounts/:accountId",
+      "responses": [
+        {
+          "uuid": "account-detail-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"{{urlParam 'accountId'}}\",\n    \"type\": \"checking\",\n    \"name\": \"Primary Checking\",\n    \"accountNumber\": \"1234567890001234\",\n    \"routingNumber\": \"021000021\",\n    \"balance\": 14250.50,\n    \"availableBalance\": 14150.50,\n    \"pendingBalance\": 100.00,\n    \"currency\": \"USD\",\n    \"isPrimary\": true,\n    \"openedDate\": \"2020-01-15\",\n    \"interestRate\": 0.01\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "transactions-list",
+      "documentation": "Get transactions for an account",
+      "method": "get",
+      "endpoint": "accounts/:accountId/transactions",
+      "responses": [
+        {
+          "uuid": "transactions-list-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"transactions\": [\n      {\n        \"id\": \"txn_001\",\n        \"type\": \"debit\",\n        \"category\": \"shopping\",\n        \"description\": \"Amazon.com\",\n        \"amount\": -89.99,\n        \"balance\": 14250.50,\n        \"date\": \"2024-01-15T10:30:00Z\",\n        \"status\": \"completed\",\n        \"merchantLogo\": \"https://logo.clearbit.com/amazon.com\"\n      },\n      {\n        \"id\": \"txn_002\",\n        \"type\": \"debit\",\n        \"category\": \"food\",\n        \"description\": \"Starbucks\",\n        \"amount\": -6.50,\n        \"balance\": 14340.49,\n        \"date\": \"2024-01-15T08:15:00Z\",\n        \"status\": \"completed\",\n        \"merchantLogo\": \"https://logo.clearbit.com/starbucks.com\"\n      },\n      {\n        \"id\": \"txn_003\",\n        \"type\": \"credit\",\n        \"category\": \"income\",\n        \"description\": \"Payroll - ACME Corp\",\n        \"amount\": 3500.00,\n        \"balance\": 14346.99,\n        \"date\": \"2024-01-14T00:00:00Z\",\n        \"status\": \"completed\",\n        \"merchantLogo\": null\n      },\n      {\n        \"id\": \"txn_004\",\n        \"type\": \"debit\",\n        \"category\": \"utilities\",\n        \"description\": \"Electric Company\",\n        \"amount\": -125.00,\n        \"balance\": 10846.99,\n        \"date\": \"2024-01-12T12:00:00Z\",\n        \"status\": \"completed\",\n        \"merchantLogo\": null\n      },\n      {\n        \"id\": \"txn_005\",\n        \"type\": \"debit\",\n        \"category\": \"transfer\",\n        \"description\": \"Transfer to Savings\",\n        \"amount\": -500.00,\n        \"balance\": 10971.99,\n        \"date\": \"2024-01-10T09:00:00Z\",\n        \"status\": \"completed\",\n        \"merchantLogo\": null\n      }\n    ],\n    \"pagination\": {\n      \"page\": 1,\n      \"pageSize\": 20,\n      \"totalPages\": 5,\n      \"totalItems\": 98,\n      \"hasMore\": true\n    }\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "transfers-create",
+      "documentation": "Create a new transfer",
+      "method": "post",
+      "endpoint": "transfers",
+      "responses": [
+        {
+          "uuid": "transfers-create-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"transferId\": \"xfr_{{faker 'string.alphanumeric' 10}}\",\n    \"fromAccount\": \"acc_checking_001\",\n    \"toAccount\": \"{{body 'toAccount'}}\",\n    \"amount\": {{body 'amount'}},\n    \"currency\": \"USD\",\n    \"status\": \"pending\",\n    \"scheduledDate\": \"{{body 'scheduledDate'}}\",\n    \"createdAt\": \"{{now}}\",\n    \"estimatedArrival\": \"{{dateTimeShift (now) 1 'days'}}\"\n  }\n}",
+          "latency": 500,
+          "statusCode": 201,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "transfers-zelle",
+      "documentation": "Send money via Zelle",
+      "method": "post",
+      "endpoint": "transfers/zelle",
+      "responses": [
+        {
+          "uuid": "transfers-zelle-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"transferId\": \"zelle_{{faker 'string.alphanumeric' 10}}\",\n    \"recipient\": \"{{body 'recipient'}}\",\n    \"amount\": {{body 'amount'}},\n    \"currency\": \"USD\",\n    \"status\": \"sent\",\n    \"memo\": \"{{body 'memo'}}\",\n    \"createdAt\": \"{{now}}\"\n  }\n}",
+          "latency": 300,
+          "statusCode": 201,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "payees-list",
+      "documentation": "Get list of saved payees",
+      "method": "get",
+      "endpoint": "payees",
+      "responses": [
+        {
+          "uuid": "payees-list-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"payees\": [\n      {\n        \"id\": \"payee_001\",\n        \"name\": \"Jane Smith\",\n        \"type\": \"zelle\",\n        \"identifier\": \"jane.smith@email.com\",\n        \"isFavorite\": true\n      },\n      {\n        \"id\": \"payee_002\",\n        \"name\": \"Bob Johnson\",\n        \"type\": \"zelle\",\n        \"identifier\": \"+1-555-987-6543\",\n        \"isFavorite\": true\n      },\n      {\n        \"id\": \"payee_003\",\n        \"name\": \"Mom\",\n        \"type\": \"zelle\",\n        \"identifier\": \"mom@family.com\",\n        \"isFavorite\": true\n      },\n      {\n        \"id\": \"payee_004\",\n        \"name\": \"Landlord LLC\",\n        \"type\": \"ach\",\n        \"identifier\": \"****4567\",\n        \"isFavorite\": false\n      }\n    ]\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "bills-list",
+      "documentation": "Get list of billers",
+      "method": "get",
+      "endpoint": "bills",
+      "responses": [
+        {
+          "uuid": "bills-list-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"billers\": [\n      {\n        \"id\": \"biller_001\",\n        \"name\": \"Electric Company\",\n        \"accountNumber\": \"****7890\",\n        \"nextDueDate\": \"2024-02-01\",\n        \"amountDue\": 125.00,\n        \"autopay\": true,\n        \"category\": \"utilities\",\n        \"logo\": \"https://logo.clearbit.com/pge.com\"\n      },\n      {\n        \"id\": \"biller_002\",\n        \"name\": \"Internet Provider\",\n        \"accountNumber\": \"****2345\",\n        \"nextDueDate\": \"2024-02-05\",\n        \"amountDue\": 79.99,\n        \"autopay\": false,\n        \"category\": \"utilities\",\n        \"logo\": \"https://logo.clearbit.com/comcast.com\"\n      },\n      {\n        \"id\": \"biller_003\",\n        \"name\": \"Credit Card\",\n        \"accountNumber\": \"****6789\",\n        \"nextDueDate\": \"2024-02-15\",\n        \"amountDue\": 450.00,\n        \"autopay\": false,\n        \"category\": \"credit\",\n        \"logo\": null\n      },\n      {\n        \"id\": \"biller_004\",\n        \"name\": \"Car Insurance\",\n        \"accountNumber\": \"POL-12345\",\n        \"nextDueDate\": \"2024-02-20\",\n        \"amountDue\": 180.00,\n        \"autopay\": true,\n        \"category\": \"insurance\",\n        \"logo\": \"https://logo.clearbit.com/geico.com\"\n      }\n    ]\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "bills-pay",
+      "documentation": "Pay a bill",
+      "method": "post",
+      "endpoint": "bills/pay",
+      "responses": [
+        {
+          "uuid": "bills-pay-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"paymentId\": \"pmt_{{faker 'string.alphanumeric' 10}}\",\n    \"billerId\": \"{{body 'billerId'}}\",\n    \"amount\": {{body 'amount'}},\n    \"scheduledDate\": \"{{body 'scheduledDate'}}\",\n    \"status\": \"scheduled\",\n    \"confirmationNumber\": \"{{faker 'string.alphanumeric' 8 true}}\",\n    \"createdAt\": \"{{now}}\"\n  }\n}",
+          "latency": 300,
+          "statusCode": 201,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "cards-list",
+      "documentation": "Get list of cards",
+      "method": "get",
+      "endpoint": "cards",
+      "responses": [
+        {
+          "uuid": "cards-list-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"cards\": [\n      {\n        \"id\": \"card_001\",\n        \"type\": \"debit\",\n        \"network\": \"visa\",\n        \"lastFour\": \"4532\",\n        \"cardholderName\": \"JOHN DOE\",\n        \"expirationDate\": \"12/26\",\n        \"status\": \"active\",\n        \"linkedAccountId\": \"acc_checking_001\",\n        \"isVirtual\": false,\n        \"dailyLimit\": 2500.00,\n        \"monthlyLimit\": 10000.00\n      },\n      {\n        \"id\": \"card_002\",\n        \"type\": \"credit\",\n        \"network\": \"mastercard\",\n        \"lastFour\": \"8976\",\n        \"cardholderName\": \"JOHN DOE\",\n        \"expirationDate\": \"08/27\",\n        \"status\": \"active\",\n        \"creditLimit\": 15000.00,\n        \"availableCredit\": 12500.00,\n        \"currentBalance\": 2500.00,\n        \"isVirtual\": false\n      },\n      {\n        \"id\": \"card_003\",\n        \"type\": \"debit\",\n        \"network\": \"visa\",\n        \"lastFour\": \"9999\",\n        \"cardholderName\": \"JOHN DOE\",\n        \"expirationDate\": \"06/25\",\n        \"status\": \"frozen\",\n        \"linkedAccountId\": \"acc_checking_001\",\n        \"isVirtual\": true,\n        \"dailyLimit\": 500.00,\n        \"monthlyLimit\": 2000.00\n      }\n    ]\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "cards-toggle-freeze",
+      "documentation": "Freeze or unfreeze a card",
+      "method": "post",
+      "endpoint": "cards/:cardId/toggle-freeze",
+      "responses": [
+        {
+          "uuid": "cards-toggle-freeze-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"cardId\": \"{{urlParam 'cardId'}}\",\n    \"status\": \"{{#if (eq (body 'action') 'freeze')}}frozen{{else}}active{{/if}}\",\n    \"updatedAt\": \"{{now}}\"\n  }\n}",
+          "latency": 200,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "cards-reveal",
+      "documentation": "Reveal full card number (requires auth)",
+      "method": "post",
+      "endpoint": "cards/:cardId/reveal",
+      "responses": [
+        {
+          "uuid": "cards-reveal-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"cardId\": \"{{urlParam 'cardId'}}\",\n    \"cardNumber\": \"4532 1234 5678 4532\",\n    \"cvv\": \"123\",\n    \"expirationDate\": \"12/26\",\n    \"expiresIn\": 60\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "user-profile",
+      "documentation": "Get user profile",
+      "method": "get",
+      "endpoint": "user/profile",
+      "responses": [
+        {
+          "uuid": "user-profile-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"user_123\",\n    \"email\": \"john.doe@example.com\",\n    \"firstName\": \"John\",\n    \"lastName\": \"Doe\",\n    \"phone\": \"+1-555-123-4567\",\n    \"address\": {\n      \"street\": \"123 Main St\",\n      \"city\": \"San Francisco\",\n      \"state\": \"CA\",\n      \"zip\": \"94102\"\n    },\n    \"preferences\": {\n      \"notifications\": true,\n      \"biometricEnabled\": true,\n      \"theme\": \"system\"\n    },\n    \"createdAt\": \"2020-01-15T00:00:00Z\"\n  }\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    },
+    {
+      "uuid": "check-deposit",
+      "documentation": "Mobile check deposit",
+      "method": "post",
+      "endpoint": "deposits/check",
+      "responses": [
+        {
+          "uuid": "check-deposit-success",
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"depositId\": \"dep_{{faker 'string.alphanumeric' 10}}\",\n    \"accountId\": \"{{body 'accountId'}}\",\n    \"amount\": {{body 'amount'}},\n    \"status\": \"pending_review\",\n    \"estimatedAvailability\": \"{{dateTimeShift (now) 2 'days'}}\",\n    \"createdAt\": \"{{now}}\"\n  }\n}",
+          "latency": 500,
+          "statusCode": 201,
+          "label": "Success",
+          "headers": [],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "enabled": true,
+      "responseMode": null,
+      "type": "http"
+    }
+  ],
+  "rootChildren": [
+    {
+      "type": "route",
+      "uuid": "auth-login"
+    },
+    {
+      "type": "route",
+      "uuid": "auth-logout"
+    },
+    {
+      "type": "route",
+      "uuid": "accounts-list"
+    },
+    {
+      "type": "route",
+      "uuid": "account-detail"
+    },
+    {
+      "type": "route",
+      "uuid": "transactions-list"
+    },
+    {
+      "type": "route",
+      "uuid": "transfers-create"
+    },
+    {
+      "type": "route",
+      "uuid": "transfers-zelle"
+    },
+    {
+      "type": "route",
+      "uuid": "payees-list"
+    },
+    {
+      "type": "route",
+      "uuid": "bills-list"
+    },
+    {
+      "type": "route",
+      "uuid": "bills-pay"
+    },
+    {
+      "type": "route",
+      "uuid": "cards-list"
+    },
+    {
+      "type": "route",
+      "uuid": "cards-toggle-freeze"
+    },
+    {
+      "type": "route",
+      "uuid": "cards-reveal"
+    },
+    {
+      "type": "route",
+      "uuid": "user-profile"
+    },
+    {
+      "type": "route",
+      "uuid": "check-deposit"
+    }
+  ],
+  "proxyReqHeaders": [],
+  "proxyResHeaders": [],
+  "data": [],
+  "folders": [],
+  "callbacks": []
+}
