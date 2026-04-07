@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:hackathon_app/simple_hub_screen.dart';
+
+import 'simple_hub_screen.dart';
 
 void main() {
   runApp(const BankingHubApp());

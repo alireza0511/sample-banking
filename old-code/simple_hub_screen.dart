@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:hackathon_app/action_tile.dart';
-import 'package:hackathon_app/edit_action_modal.dart';
-import 'package:hackathon_app/full_screen_chat_modal.dart';
+
+import 'action_tile.dart';
+import 'edit_action_modal.dart';
+import 'full_screen_chat_modal.dart';
+
 
 class SimpleHubScreen extends StatefulWidget {
   const SimpleHubScreen({super.key});

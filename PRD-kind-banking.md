@@ -2454,7 +2454,7 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 
 **Goal:** Demo-ready app with working on-device AI chat
 
-**Duration:** ~6.5 weeks
+**Duration:** ~5 weeks
 
 #### M1 — Foundation (1 week)
 
@@ -2503,77 +2503,58 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 
 **M1b Deliverable:** Complete deep linking infrastructure ready for voice assistant integration
 
-> **Note:** Deep linking enables "Hey Siri, show my balance" to work seamlessly. This must be done before M5 (Siri Integration).
+> **Note:** Deep linking enables "Hey Siri, show my balance" to work seamlessly. This must be done before M4 (Siri Integration).
 
 ---
 
-#### M2 — Adaptive Hub (1.5 weeks)
+#### M2 — Banking Screens (2 weeks)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M2.1 | Hub profile entity | Create `HubProfileEntity` with accessibility flags | Must Have |
-| M2.2 | Profile resolver | Implement `HubProfileResolver` reading MediaQuery flags | Must Have |
-| M2.3 | Hub widget factory | Create factory pattern for layout selection | Must Have |
-| M2.4 | Standard hub layout | 3-column grid with balance card, quick actions, transactions | Must Have |
-| M2.5 | Assistive hub layout | Single column, full-width buttons, semantic labels | Must Have |
-| M2.6 | Large text hub layout | 2-column grid, larger tiles, 18sp+ text | Must Have |
-| M2.7 | Color-blind hub layout | Adjusted palette, pattern indicators | Must Have |
-| M2.8 | Live re-resolution | Hub rebuilds when accessibility settings change | Must Have |
-| M2.9 | Chat FAB | Floating action button on all hub layouts | Must Have |
-| M2.10 | Hub animations | Entry animations (respecting reduce motion) | Should Have |
+| M2.1 | **Mockoon Banking API** | Configure all banking endpoints in Mockoon (accounts, transactions, transfers, bills, cards) | Must Have |
+| M2.2 | **Mockoon scenarios** | Create happy path, error, empty, and slow response scenarios | Must Have |
+| M2.3 | Balance screen | Account summary, balance display, hide/show toggle | Must Have |
+| M2.4 | Balance bloc | UseCase and ServiceAdapter calling Mockoon `/api/v1/accounts` | Must Have |
+| M2.5 | Transfer screen | Payee selector, amount input, confirmation flow | Must Have |
+| M2.6 | Transfer bloc | UseCase calling Mockoon `/api/v1/transfers` | Must Have |
+| M2.7 | Transactions screen | Paginated list, filters, transaction detail sheet | Must Have |
+| M2.8 | Transactions bloc | UseCase calling Mockoon `/api/v1/transactions` with pagination | Must Have |
+| M2.9 | Pay bills screen | Biller list, amount, date selection, confirmation | Must Have |
+| M2.10 | Pay bills bloc | UseCase calling Mockoon `/api/v1/bills/pay` | Must Have |
+| M2.11 | Cards screen | Card list, freeze/unfreeze, card number reveal | Must Have |
+| M2.12 | Cards bloc | UseCase calling Mockoon `/api/v1/cards` | Must Have |
+| M2.13 | Deep link handling | Pre-fill screens from deep link parameters | Should Have |
+| M2.14 | **Error handling** | Handle Mockoon error scenarios, show appropriate UI | Must Have |
 
-**M2 Deliverable:** Hub screen adapts to accessibility settings in real-time
+**M2 Deliverable:** All 5 banking screens functional with Mockoon API
 
 ---
 
-#### M3 — Banking Screens (2 weeks)
+#### M3 — On-Device LLM (1 week) ⭐ KEY DEMO MILESTONE
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M3.1 | **Mockoon Banking API** | Configure all banking endpoints in Mockoon (accounts, transactions, transfers, bills, cards) | Must Have |
-| M3.2 | **Mockoon scenarios** | Create happy path, error, empty, and slow response scenarios | Must Have |
-| M3.3 | Balance screen | Account summary, balance display, hide/show toggle | Must Have |
-| M3.4 | Balance bloc | UseCase and ServiceAdapter calling Mockoon `/api/v1/accounts` | Must Have |
-| M3.5 | Transfer screen | Payee selector, amount input, confirmation flow | Must Have |
-| M3.6 | Transfer bloc | UseCase calling Mockoon `/api/v1/transfers` | Must Have |
-| M3.7 | Transactions screen | Paginated list, filters, transaction detail sheet | Must Have |
-| M3.8 | Transactions bloc | UseCase calling Mockoon `/api/v1/transactions` with pagination | Must Have |
-| M3.9 | Pay bills screen | Biller list, amount, date selection, confirmation | Must Have |
-| M3.10 | Pay bills bloc | UseCase calling Mockoon `/api/v1/bills/pay` | Must Have |
-| M3.11 | Cards screen | Card list, freeze/unfreeze, card number reveal | Must Have |
-| M3.12 | Cards bloc | UseCase calling Mockoon `/api/v1/cards` | Must Have |
-| M3.13 | Deep link handling | Pre-fill screens from deep link parameters | Should Have |
-| M3.14 | **Error handling** | Handle Mockoon error scenarios, show appropriate UI | Must Have |
+| M3.1 | flutter_local_ai setup | Add package, configure iOS/Android requirements | Must Have |
+| M3.2 | LLM service interface | Create abstract `LlmService` interface | Must Have |
+| M3.3 | On-device provider | Implement `OnDeviceLlmProvider` wrapping flutter_local_ai | Must Have |
+| M3.4 | Availability detection | Check and cache on-device LLM availability at startup | Must Have |
+| M3.5 | Simple chat UI | Basic chat screen with text input and message list | Must Have |
+| M3.6 | Chat bloc | UseCase for chat message handling | Must Have |
+| M3.7 | Message bubbles | User and assistant message bubble widgets | Must Have |
+| M3.8 | Typing indicator | Show indicator while LLM is generating | Must Have |
+| M3.9 | Error handling | Graceful error display if LLM unavailable | Must Have |
+| M3.10 | Privacy indicator | "On-device" badge showing data stays local | Must Have |
+| M3.11 | Conversation context | Maintain last 10 messages as context | Should Have |
 
-**M3 Deliverable:** All 5 banking screens functional with Mockoon API
-
----
-
-#### M4 — On-Device LLM (1 week) ⭐ KEY DEMO MILESTONE
-
-| Task ID | Task | Description | Priority |
-|---|---|---|---|
-| M4.1 | flutter_local_ai setup | Add package, configure iOS/Android requirements | Must Have |
-| M4.2 | LLM service interface | Create abstract `LlmService` interface | Must Have |
-| M4.3 | On-device provider | Implement `OnDeviceLlmProvider` wrapping flutter_local_ai | Must Have |
-| M4.4 | Availability detection | Check and cache on-device LLM availability at startup | Must Have |
-| M4.5 | Simple chat UI | Basic chat screen with text input and message list | Must Have |
-| M4.6 | Chat bloc | UseCase for chat message handling | Must Have |
-| M4.7 | Message bubbles | User and assistant message bubble widgets | Must Have |
-| M4.8 | Typing indicator | Show indicator while LLM is generating | Must Have |
-| M4.9 | Error handling | Graceful error display if LLM unavailable | Must Have |
-| M4.10 | Privacy indicator | "On-device" badge showing data stays local | Must Have |
-| M4.11 | Conversation context | Maintain last 10 messages as context | Should Have |
-
-**M4 Deliverable:** ✅ **DEMO READY** — Chat works with on-device LLM, completely offline
+**M3 Deliverable:** ✅ **DEMO READY** — Chat works with on-device LLM, completely offline
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    PHASE 1 DEMO CHECKPOINT                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ✅ App launches with biometric authentication                   │
-│  ✅ Adaptive hub adjusts to accessibility settings               │
+│  ✅ App launches with simple login (easy dev testing)            │
+│  ✅ Simple hub with customizable quick actions                   │
 │  ✅ All banking screens work with mock data                      │
 │  ✅ Chat works with ON-DEVICE LLM (no internet required!)        │
 │  ✅ Privacy indicator shows "Responses generated on device"      │
@@ -2581,7 +2562,6 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 │  Demo talking points:                                            │
 │  • "Put your phone in airplane mode — chat still works"         │
 │  • "Your financial questions never leave your device"           │
-│  • "Turn on VoiceOver — watch the hub transform"                │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -2594,70 +2574,70 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 
 **Duration:** ~3 weeks
 
-#### M5 — Voice Assistants (1 week)
+#### M4 — Voice Assistants (1 week)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M5.1 | flutter_app_intents setup | Add package, configure iOS entitlements | Must Have |
-| M5.2 | Banking intents | Register ShowBalance, Transfer, PayBills, Cards intents | Must Have |
-| M5.3 | Intent handlers | Handle intent callbacks, extract parameters | Must Have |
-| M5.4 | app_links setup | Configure deep link handling for both platforms | Must Have |
-| M5.5 | Deep link router | Parse incoming URIs, route to correct screen | Must Have |
-| M5.6 | Auth gate for intents | Require auth before deep link navigation | Must Have |
-| M5.7 | Siri testing | Test all voice commands on iOS device | Must Have |
-| M5.8 | Shortcuts donation | Donate user actions for Siri suggestions | Should Have |
-| M5.9 | Spotlight indexing | Index banking actions for Spotlight search | Should Have |
-| M5.10 | Android App Actions | Configure shortcuts.xml (when flutter_app_intents supports) | Should Have |
+| M4.1 | flutter_app_intents setup | Add package, configure iOS entitlements | Must Have |
+| M4.2 | Banking intents | Register ShowBalance, Transfer, PayBills, Cards intents | Must Have |
+| M4.3 | Intent handlers | Handle intent callbacks, extract parameters | Must Have |
+| M4.4 | app_links setup | Configure deep link handling for both platforms | Must Have |
+| M4.5 | Deep link router | Parse incoming URIs, route to correct screen | Must Have |
+| M4.6 | Auth gate for intents | Require auth before deep link navigation | Must Have |
+| M4.7 | Siri testing | Test all voice commands on iOS device | Must Have |
+| M4.8 | Shortcuts donation | Donate user actions for Siri suggestions | Should Have |
+| M4.9 | Spotlight indexing | Index banking actions for Spotlight search | Should Have |
+| M4.10 | Android App Actions | Configure shortcuts.xml (when flutter_app_intents supports) | Should Have |
 
-**M5 Deliverable:** "Hey Siri, show my balance in BankApp" works
+**M4 Deliverable:** "Hey Siri, show my balance in BankApp" works
 
 ---
 
-#### M6 — Speech Services (0.5 weeks)
+#### M5 — Speech Services (0.5 weeks)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M6.1 | SttService interface | Create abstract STT interface | Must Have |
-| M6.2 | TtsService interface | Create abstract TTS interface | Must Have |
-| M6.3 | On-device STT | Implement using `speech_to_text` package | Must Have |
-| M6.4 | On-device TTS | Implement using `flutter_tts` package | Must Have |
-| M6.5 | Service registration | Register services in locator.dart | Must Have |
-| M6.6 | Voice input button | Add mic button to chat input | Must Have |
-| M6.7 | Voice output toggle | Add option to read responses aloud | Should Have |
+| M5.1 | SttService interface | Create abstract STT interface | Must Have |
+| M5.2 | TtsService interface | Create abstract TTS interface | Must Have |
+| M5.3 | On-device STT | Implement using `speech_to_text` package | Must Have |
+| M5.4 | On-device TTS | Implement using `flutter_tts` package | Must Have |
+| M5.5 | Service registration | Register services in locator.dart | Must Have |
+| M5.6 | Voice input button | Add mic button to chat input | Must Have |
+| M5.7 | Voice output toggle | Add option to read responses aloud | Should Have |
 
-**M6 Deliverable:** Chat supports voice input and output
+**M5 Deliverable:** Chat supports voice input and output
 
 ---
 
-#### M7 — Enhanced Chat (1 week)
+#### M6 — Enhanced Chat (1 week)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M7.1 | Voice mode UI | Full voice conversation mode with waveform | Should Have |
-| M7.2 | Quick suggestions | Suggested questions based on context | Should Have |
-| M7.3 | Rich responses | Format responses with cards, lists, actions | Should Have |
-| M7.4 | Chat history | Persist chat history locally | Should Have |
-| M7.5 | Clear conversation | Option to clear chat history | Must Have |
-| M7.6 | Accessibility labels | Full VoiceOver/TalkBack support for chat | Must Have |
-| M7.7 | Keyboard handling | Proper keyboard avoidance, dismiss on scroll | Must Have |
+| M6.1 | Voice mode UI | Full voice conversation mode with waveform | Should Have |
+| M6.2 | Quick suggestions | Suggested questions based on context | Should Have |
+| M6.3 | Rich responses | Format responses with cards, lists, actions | Should Have |
+| M6.4 | Chat history | Persist chat history locally | Should Have |
+| M6.5 | Clear conversation | Option to clear chat history | Must Have |
+| M6.6 | Accessibility labels | Full VoiceOver/TalkBack support for chat | Must Have |
+| M6.7 | Keyboard handling | Proper keyboard avoidance, dismiss on scroll | Must Have |
 
-**M7 Deliverable:** Polished chat experience with voice support
+**M6 Deliverable:** Polished chat experience with voice support
 
 ---
 
-#### M8 — Polish (0.5 weeks)
+#### M7 — Polish (0.5 weeks)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M8.1 | Loading states | Shimmer placeholders for all screens | Must Have |
-| M8.2 | Error states | Error screens with retry actions | Must Have |
-| M8.3 | Empty states | Friendly empty state illustrations | Should Have |
-| M8.4 | Pull to refresh | Refresh gesture on list screens | Should Have |
-| M8.5 | Haptic feedback | Tactile feedback for actions | Should Have |
-| M8.6 | Accessibility audit | Test with VoiceOver/TalkBack, fix issues | Must Have |
-| M8.7 | Performance pass | Profile and optimize slow screens | Must Have |
+| M7.1 | Loading states | Shimmer placeholders for all screens | Must Have |
+| M7.2 | Error states | Error screens with retry actions | Must Have |
+| M7.3 | Empty states | Friendly empty state illustrations | Should Have |
+| M7.4 | Pull to refresh | Refresh gesture on list screens | Should Have |
+| M7.5 | Haptic feedback | Tactile feedback for actions | Should Have |
+| M7.6 | Accessibility audit | Test with VoiceOver/TalkBack, fix issues | Must Have |
+| M7.7 | Performance pass | Profile and optimize slow screens | Must Have |
 
-**M8 Deliverable:** ✅ **ENHANCED DEMO READY** — Full experience without backend
+**M7 Deliverable:** ✅ **ENHANCED DEMO READY** — Full experience without backend
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -2684,79 +2664,100 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 
 ### Phase 3: Enterprise Backend (Production)
 
-**Goal:** Full hybrid architecture with backend MCP server
+**Goal:** Full hybrid architecture with backend MCP server, production security, and adaptive accessibility
 
-**Duration:** ~4.5 weeks (Flutter) + ~5 weeks (Backend, parallel)
+**Duration:** ~6 weeks (Flutter) + ~5 weeks (Backend, parallel)
 
-#### M9 — Local LLM Router (1 week)
+#### M8 — Local LLM Router (1 week)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M9.1 | Router interface | Create `LlmRouter` interface for routing decisions | Must Have |
-| M9.2 | PII detector | Implement regex-based PII detection | Must Have |
-| M9.3 | Privacy settings | Add privacy level setting to user preferences | Must Have |
-| M9.4 | Routing logic | Implement decision matrix (PII → on-device, etc.) | Must Have |
-| M9.5 | Router integration | Replace direct LLM calls with router | Must Have |
-| M9.6 | Fallback handling | Handle case when on-device unavailable | Must Have |
-| M9.7 | Routing telemetry | Log routing decisions locally (for debugging) | Should Have |
+| M8.1 | Router interface | Create `LlmRouter` interface for routing decisions | Must Have |
+| M8.2 | PII detector | Implement regex-based PII detection | Must Have |
+| M8.3 | Privacy settings | Add privacy level setting to user preferences | Must Have |
+| M8.4 | Routing logic | Implement decision matrix (PII → on-device, etc.) | Must Have |
+| M8.5 | Router integration | Replace direct LLM calls with router | Must Have |
+| M8.6 | Fallback handling | Handle case when on-device unavailable | Must Have |
+| M8.7 | Routing telemetry | Log routing decisions locally (for debugging) | Should Have |
 
-**M9 Deliverable:** Smart routing based on PII and privacy settings
+**M8 Deliverable:** Smart routing based on PII and privacy settings
 
 ---
 
-#### M10 — Backend MCP Client (1.5 weeks)
+#### M9 — Backend MCP Client (1.5 weeks)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M10.1 | **Mockoon MCP API** | Configure MCP endpoints in Mockoon (`/llm/generate`, `/llm/stream`, `/llm/capabilities`) | Must Have |
-| M10.2 | **Mockoon SSE** | Configure Server-Sent Events streaming in Mockoon for `/llm/generate/stream` | Must Have |
-| M10.3 | API client setup | Create HTTP client with interceptors (can upgrade to Dio for advanced features) | Must Have |
-| M10.4 | Auth integration | JWT token handling, refresh flow (mock tokens from Mockoon) | Must Have |
-| M10.5 | Generate endpoint | Implement `/api/v1/llm/generate` call | Must Have |
-| M10.6 | Streaming support | Implement SSE streaming for `/generate/stream` | Must Have |
-| M10.7 | Error handling | Map API errors to user-friendly messages | Must Have |
-| M10.8 | Retry logic | Exponential backoff for transient failures | Must Have |
-| M10.9 | Offline detection | Detect offline, route to on-device only | Must Have |
-| M10.10 | Provider display | Show which provider responded (on-device/cloud/mock) | Must Have |
-| M10.11 | Timeout handling | Configurable timeouts, cancel long requests | Should Have |
+| M9.1 | **Mockoon MCP API** | Configure MCP endpoints in Mockoon (`/llm/generate`, `/llm/stream`, `/llm/capabilities`) | Must Have |
+| M9.2 | **Mockoon SSE** | Configure Server-Sent Events streaming in Mockoon for `/llm/generate/stream` | Must Have |
+| M9.3 | API client setup | Create HTTP client with interceptors (can upgrade to Dio for advanced features) | Must Have |
+| M9.4 | Auth integration | JWT token handling, refresh flow (mock tokens from Mockoon) | Must Have |
+| M9.5 | Generate endpoint | Implement `/api/v1/llm/generate` call | Must Have |
+| M9.6 | Streaming support | Implement SSE streaming for `/generate/stream` | Must Have |
+| M9.7 | Error handling | Map API errors to user-friendly messages | Must Have |
+| M9.8 | Retry logic | Exponential backoff for transient failures | Must Have |
+| M9.9 | Offline detection | Detect offline, route to on-device only | Must Have |
+| M9.10 | Provider display | Show which provider responded (on-device/cloud/mock) | Must Have |
+| M9.11 | Timeout handling | Configurable timeouts, cancel long requests | Should Have |
 
-**M10 Deliverable:** App can call Mockoon MCP server (ready to switch to real backend later)
+**M9 Deliverable:** App can call Mockoon MCP server (ready to switch to real backend later)
 
 ---
 
-#### M11 — Hybrid Integration (1 week)
+#### M10 — Hybrid Integration (1 week)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M11.1 | Full router integration | Connect PII detector + backend client + on-device | Must Have |
-| M11.2 | Fallback consent | Prompt user before first cloud fallback | Must Have |
-| M11.3 | Provider indicator | Dynamic UI showing "On-device" vs "Cloud" | Must Have |
-| M11.4 | Offline graceful | Seamless switch to on-device when offline | Must Have |
-| M11.5 | Settings UI | Privacy level picker in settings screen | Must Have |
-| M11.6 | Usage display | Show LLM usage stats in settings (optional) | Could Have |
-| M11.7 | End-to-end testing | Test all routing scenarios | Must Have |
+| M10.1 | Full router integration | Connect PII detector + backend client + on-device | Must Have |
+| M10.2 | Fallback consent | Prompt user before first cloud fallback | Must Have |
+| M10.3 | Provider indicator | Dynamic UI showing "On-device" vs "Cloud" | Must Have |
+| M10.4 | Offline graceful | Seamless switch to on-device when offline | Must Have |
+| M10.5 | Settings UI | Privacy level picker in settings screen | Must Have |
+| M10.6 | Usage display | Show LLM usage stats in settings (optional) | Could Have |
+| M10.7 | End-to-end testing | Test all routing scenarios | Must Have |
 
-**M11 Deliverable:** ✅ **PRODUCTION READY** — Full hybrid LLM architecture
+**M10 Deliverable:** ✅ **MCP COMPLETE** — Full hybrid LLM architecture
 
 ---
 
-#### M12 — Biometric Authentication (1 week)
+#### M11 — Biometric Authentication (1 week)
 
 | Task ID | Task | Description | Priority |
 |---|---|---|---|
-| M12.1 | **Biometric capability check** | Detect Face ID / Touch ID (iOS) and Fingerprint / Face (Android) availability | Must Have |
-| M12.2 | **Biometric auth flow** | Implement `local_auth` biometric authentication | Must Have |
-| M12.3 | **PIN fallback** | Secure PIN entry when biometric unavailable or failed | Must Have |
-| M12.4 | **Secure PIN storage** | Store PIN hash in `flutter_secure_storage` | Must Have |
-| M12.5 | **Session timeout** | Auto-lock after configurable inactivity period (default 5 min) | Must Have |
-| M12.6 | **Re-auth on resume** | Biometric prompt when app returns from background after timeout | Must Have |
-| M12.7 | **Failed attempt lockout** | Lock account after N failed biometric/PIN attempts | Must Have |
-| M12.8 | **Biometric settings UI** | Enable/disable biometric, change PIN in settings | Should Have |
-| M12.9 | **Migration flow** | Prompt existing users to enable biometric after login | Should Have |
+| M11.1 | **Biometric capability check** | Detect Face ID / Touch ID (iOS) and Fingerprint / Face (Android) availability | Must Have |
+| M11.2 | **Biometric auth flow** | Implement `local_auth` biometric authentication | Must Have |
+| M11.3 | **PIN fallback** | Secure PIN entry when biometric unavailable or failed | Must Have |
+| M11.4 | **Secure PIN storage** | Store PIN hash in `flutter_secure_storage` | Must Have |
+| M11.5 | **Session timeout** | Auto-lock after configurable inactivity period (default 5 min) | Must Have |
+| M11.6 | **Re-auth on resume** | Biometric prompt when app returns from background after timeout | Must Have |
+| M11.7 | **Failed attempt lockout** | Lock account after N failed biometric/PIN attempts | Must Have |
+| M11.8 | **Biometric settings UI** | Enable/disable biometric, change PIN in settings | Should Have |
+| M11.9 | **Migration flow** | Prompt existing users to enable biometric after login | Should Have |
 
-**M12 Deliverable:** Production-grade biometric security with PIN fallback
+**M11 Deliverable:** Production-grade biometric security with PIN fallback
 
 > **Note:** Biometric authentication replaces simple login for production. Simple login remains available in development mode via dev shortcuts (M1.13).
+
+---
+
+#### M12 — Adaptive Hub (1.5 weeks)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M12.1 | Hub profile entity | Create `HubProfileEntity` with accessibility flags | Must Have |
+| M12.2 | Profile resolver | Implement `HubProfileResolver` reading MediaQuery flags | Must Have |
+| M12.3 | Hub widget factory | Create factory pattern for layout selection | Must Have |
+| M12.4 | Standard hub layout | Current simple hub as default layout | Must Have |
+| M12.5 | Assistive hub layout | Single column, full-width buttons, semantic labels | Must Have |
+| M12.6 | Large text hub layout | 2-column grid, larger tiles, 18sp+ text | Must Have |
+| M12.7 | Color-blind hub layout | Adjusted palette, pattern indicators | Must Have |
+| M12.8 | Live re-resolution | Hub rebuilds when accessibility settings change | Must Have |
+| M12.9 | Hub animations | Entry animations (respecting reduce motion) | Should Have |
+| M12.10 | User preference override | Allow manual layout selection in settings | Should Have |
+
+**M12 Deliverable:** ✅ **PRODUCTION READY** — Hub adapts to accessibility settings in real-time
+
+> **Note:** The simple hub (from Phase 1) becomes the "Standard" layout. Adaptive layouts provide enhanced accessibility for users with VoiceOver, large text, or color blindness needs.
 
 ---
 
@@ -2819,41 +2820,41 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 ### Implementation Timeline
 
 ```
-Week  1   2   3   4   5   6   7   8   9   10  11  12  13  14  15  16
-      ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-      │                                                             │
-      │  PHASE 1: Core App + On-Device LLM                         │
-      │  ══════════════════════════════════                         │
-      │  M1  ████                                                   │
-      │  M1b     ████ ⚡ Deep Linking (HIGH PRIORITY)               │
-      │  M2          ██████                                         │
-      │  M3                ████████                                 │
-      │  M4                        ████  ← DEMO 1 (On-device AI)   │
-      │                                                             │
-      │  PHASE 2: Voice & Polish                                    │
-      │  ═══════════════════════                                    │
-      │  M5                            ████                         │
-      │  M6                                ██                       │
-      │  M7                                  ████                   │
-      │  M8                                      ██ ← DEMO 2 (Voice)│
-      │                                                             │
-      │  PHASE 3: Enterprise Backend                                │
-      │  ═══════════════════════════                                │
-      │  M9                                          ████           │
-      │  M10                                             ██████     │
-      │  M11                                                   ████ │
-      │  M12                                                     ████
-      │                                                          ↑  │
-      │                                                  PRODUCTION │
-      │                                                         │
-      │  BACKEND (Parallel)                                     │
-      │  ══════════════════                                     │
-      │  B1         ██████                                      │
-      │  B2               ██████                                │
-      │  B3                     ████                            │
-      │  B4                         ████                        │
-      │                                                         │
-      └─────────────────────────────────────────────────────────┘
+Week  1   2   3   4   5   6   7   8   9   10  11  12  13  14
+      ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+      │                                                     │
+      │  PHASE 1: Core App + On-Device LLM (5 weeks)       │
+      │  ══════════════════════════════════                 │
+      │  M1  ████                                           │
+      │  M1b     ████ ⚡ Deep Linking                       │
+      │  M2          ████████                               │
+      │  M3                  ████  ← DEMO 1 (On-device AI) │
+      │                                                     │
+      │  PHASE 2: Voice & Polish (3 weeks)                  │
+      │  ═══════════════════════                            │
+      │  M4                      ████                       │
+      │  M5                          ██                     │
+      │  M6                            ████                 │
+      │  M7                                ██ ← DEMO 2      │
+      │                                                     │
+      │  PHASE 3: Enterprise + Accessibility (6 weeks)      │
+      │  ═══════════════════════════════════                │
+      │  M8                                    ████         │
+      │  M9                                        ██████   │
+      │  M10                                            ████│
+      │  M11                                              ██│██
+      │  M12                                                │████ Adaptive Hub
+      │                                                     ↑
+      │                                             PRODUCTION
+      │                                                     │
+      │  BACKEND (Parallel)                                 │
+      │  ══════════════════                                 │
+      │  B1     ██████                                      │
+      │  B2           ██████                                │
+      │  B3                 ████                            │
+      │  B4                     ████                        │
+      │                                                     │
+      └─────────────────────────────────────────────────────┘
 
 LEGEND:
 ████ = Development period
@@ -2864,20 +2865,20 @@ LEGEND:
 
 | Demo | When | What Works | Key Talking Points |
 |---|---|---|---|
-| **Demo 1** | Week 6.5 | On-device LLM chat + deep linking | "AI chat works in airplane mode, data never leaves device" + full deep link navigation |
-| **Demo 2** | Week 9.5 | Voice + Polish | "Hey Siri, show my balance" works via deep linking + voice chat |
-| **Production** | Week 14 | Full hybrid + biometric | Enterprise-ready with cloud fallback, biometric auth, audit logging |
+| **Demo 1** | Week 5 | On-device LLM chat + deep linking | "AI chat works in airplane mode, data never leaves device" + full deep link navigation |
+| **Demo 2** | Week 8 | Voice + Polish | "Hey Siri, show my balance" works via deep linking + voice chat |
+| **Production** | Week 14 | Full hybrid + biometric + adaptive | Enterprise-ready with cloud fallback, biometric auth, adaptive accessibility |
 
 ### Resource Requirements
 
 | Role | Phase 1 | Phase 2 | Phase 3 | Total |
 |---|---|---|---|---|
-| Flutter Developer | 6.5 weeks | 3 weeks | 4.5 weeks | 14 weeks |
+| Flutter Developer | 5 weeks | 3 weeks | 6 weeks | 14 weeks |
 | Backend Developer | — | — | 5 weeks | 5 weeks |
 | QA Engineer | 0.5 weeks | 0.5 weeks | 1.5 weeks | 2.5 weeks |
-| Designer (support) | As needed | As needed | — | — |
+| Designer (support) | As needed | As needed | As needed | — |
 
-> **Note:** Backend development (B1-B4) can run **in parallel** with Flutter Phase 2 and Phase 3, reducing total calendar time.
+> **Note:** Backend development (B1-B4) can run **in parallel** with Flutter Phase 2 and Phase 3, reducing total calendar time. Adaptive Hub (M12) is last since simple hub works for demo.
 
 ---
 

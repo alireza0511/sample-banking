@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:hackathon_app/ollama_service.dart';
-import 'package:hackathon_app/navigation_models.dart';
-import 'package:hackathon_app/intent_resolver.dart';
-import 'package:hackathon_app/deep_link_launcher.dart';
+
+import 'deep_link_launcher.dart';
+import 'intent_resolver.dart';
+import 'navigation_models.dart';
+import 'ollama_service.dart';
+
 
 class FullScreenChatModal extends StatefulWidget {
   const FullScreenChatModal({super.key});
