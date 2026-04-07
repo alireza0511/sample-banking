@@ -21,8 +21,8 @@ dependencies:
   # State Management & DI
   provider: ^6.1.2
 
-  # Networking
-  dio: ^5.8.0
+  # Networking (http is included via clean_framework)
+  # Note: Dio can be added later for advanced features like interceptors
 
   # Storage
   flutter_secure_storage: ^9.2.4

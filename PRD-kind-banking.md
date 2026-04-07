@@ -624,49 +624,59 @@ class LocalAiProvider {
 
 ```dart
 // lib/core/llm/backend/mcp_client.dart
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class BackendMcpClient {
-  final Dio _dio;
+  final http.Client _client;
   final McpAuth _auth;
   final String _baseUrl;
 
   BackendMcpClient({
     required String baseUrl,
     required McpAuth auth,
+    http.Client? client,
   })  : _baseUrl = baseUrl,
         _auth = auth,
-        _dio = Dio(BaseOptions(
-          baseUrl: baseUrl,
-          connectTimeout: Duration(seconds: 30),
-          receiveTimeout: Duration(seconds: 60),
-        ));
+        _client = client ?? http.Client();
 
   Future<LlmResponse> generate(LlmRequest request) async {
     final token = await _auth.getAccessToken();
 
-    final response = await _dio.post(
-      '/api/v1/llm/generate',
-      data: request.toJson(),
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/llm/generate'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(request.toJson()),
     );
 
-    return LlmResponse.fromJson(response.data);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to generate: ${response.statusCode}');
+    }
+
+    return LlmResponse.fromJson(jsonDecode(response.body));
   }
 
   Stream<LlmChunk> generateStream(LlmRequest request) async* {
     final token = await _auth.getAccessToken();
 
-    final response = await _dio.post(
-      '/api/v1/llm/generate/stream',
-      data: request.toJson(),
-      options: Options(
-        headers: {'Authorization': 'Bearer $token'},
-        responseType: ResponseType.stream,
-      ),
+    final streamRequest = http.Request(
+      'POST',
+      Uri.parse('$_baseUrl/api/v1/llm/generate/stream'),
     );
+    streamRequest.headers.addAll({
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+      'Accept': 'text/event-stream',
+    });
+    streamRequest.body = jsonEncode(request.toJson());
 
-    await for (final chunk in response.data.stream) {
-      final lines = utf8.decode(chunk).split('\n');
+    final streamedResponse = await _client.send(streamRequest);
+
+    await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+      final lines = chunk.split('\n');
       for (final line in lines) {
         if (line.startsWith('data: ')) {
           final json = jsonDecode(line.substring(6));
@@ -675,8 +685,14 @@ class BackendMcpClient {
       }
     }
   }
+
+  void dispose() {
+    _client.close();
+  }
 }
 ```
+
+> **Note:** The `http` package is used for compatibility with clean_framework. For advanced features like interceptors, retry logic, or progress tracking, consider upgrading to Dio in Phase 3.
 
 ### 4.9 Backend Implementation Notes
 
@@ -1990,7 +2006,7 @@ Key differences:
 | `flutter_local_ai` | ^0.0.6+ | Unified on-device LLM: Apple Foundation Models (iOS 26+), ML Kit GenAI/Gemini Nano (Android) |
 | `json_rpc_2` | ^3.x | JSON-RPC 2.0 protocol for MCP communication |
 | `stream_channel` | ^2.x | Stream-based communication for MCP protocol |
-| `dio` | ^5.x | HTTP client for Ollama and cloud API providers |
+| `http` | ^1.2.x | HTTP client for API calls (compatible with clean_framework). Dio can be added later for advanced features. |
 | `speech_to_text` | ^6.x | On-device speech recognition for chat voice input |
 | `flutter_tts` | ^3.x | Text-to-speech for chat voice output |
 | `flutter_svg` | ^2.x | SVG assets for icons and card artwork |
@@ -2033,7 +2049,7 @@ Mockoon is used to mock all backend APIs during development, enabling frontend d
 │  │                          Flutter App                                    │ │
 │  │                                                                         │ │
 │  │  ┌─────────────────┐         ┌─────────────────────────────────────┐  │ │
-│  │  │  On-Device LLM  │         │         HTTP Client (Dio)           │  │ │
+│  │  │  On-Device LLM  │         │         HTTP Client (http)           │  │ │
 │  │  │ (flutter_local_ │         │                                     │  │ │
 │  │  │      ai)        │         │  Base URL configured per environment│  │ │
 │  │  └─────────────────┘         └──────────────────┬──────────────────┘  │ │
@@ -2267,30 +2283,67 @@ Mockoon supports multiple response scenarios for testing different states:
 
 ```dart
 // lib/core/network/api_client.dart
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class ApiClient {
-  late final Dio _dio;
+  final http.Client _client;
+  final String _baseUrl;
+  String? _mockScenario;
 
-  ApiClient() {
-    _dio = Dio(BaseOptions(
-      baseUrl: AppConfig.baseUrl,
-      connectTimeout: Duration(seconds: 30),
-      receiveTimeout: Duration(seconds: 30),
-    ));
+  ApiClient({http.Client? client})
+      : _client = client ?? http.Client(),
+        _baseUrl = AppConfig.baseUrl;
 
-    // Add mock scenario header in development
+  /// Set mock scenario for testing (development only)
+  void setMockScenario(String? scenario) {
     if (AppConfig.environment == Environment.development) {
-      _dio.interceptors.add(InterceptorsWrapper(
-        onRequest: (options, handler) {
-          // Can add mock scenario header dynamically
-          // options.headers['X-Mock-Scenario'] = 'happy';
-          handler.next(options);
-        },
-      ));
+      _mockScenario = scenario;
     }
   }
+
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        if (_mockScenario != null) 'X-Mock-Scenario': _mockScenario!,
+      };
+
+  Future<Map<String, dynamic>> get(String path) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl$path'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl$path'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    return _handleResponse(response);
+  }
+
+  Map<String, dynamic> _handleResponse(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return jsonDecode(response.body);
+    }
+    throw ApiException(response.statusCode, response.body);
+  }
+
+  void dispose() {
+    _client.close();
+  }
+}
+
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+  ApiException(this.statusCode, this.message);
 }
 ```
+
+> **Note:** Using `http` package for clean_framework compatibility. Upgrade to Dio in Phase 3 for advanced features like interceptors, retry logic, and request cancellation.
 
 ---
 
@@ -2414,7 +2467,7 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 | M1.5 | Theme setup | Create `app_theme.dart`, color tokens, typography | Must Have |
 | M1.6 | **Mockoon setup** | Create Mockoon environment files, configure endpoints, test connection | Must Have |
 | M1.7 | **Environment config** | Create `AppConfig` with dev/staging/prod base URLs | Must Have |
-| M1.8 | **API client** | Create Dio-based API client with Mockoon integration | Must Have |
+| M1.8 | **API client** | Create `http`-based API client with Mockoon integration (compatible with clean_framework) | Must Have |
 | M1.9 | **Simple login screen** | Username/password form, calls Mockoon `/auth/login` | Must Have |
 | M1.10 | **Auth state management** | Store auth token, isAuthenticated flag, user info | Must Have |
 | M1.11 | **Auth gate** | Route guard redirects to login if not authenticated | Must Have |
@@ -2657,7 +2710,7 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 |---|---|---|---|
 | M10.1 | **Mockoon MCP API** | Configure MCP endpoints in Mockoon (`/llm/generate`, `/llm/stream`, `/llm/capabilities`) | Must Have |
 | M10.2 | **Mockoon SSE** | Configure Server-Sent Events streaming in Mockoon for `/llm/generate/stream` | Must Have |
-| M10.3 | API client setup | Create Dio-based HTTP client with interceptors | Must Have |
+| M10.3 | API client setup | Create HTTP client with interceptors (can upgrade to Dio for advanced features) | Must Have |
 | M10.4 | Auth integration | JWT token handling, refresh flow (mock tokens from Mockoon) | Must Have |
 | M10.5 | Generate endpoint | Implement `/api/v1/llm/generate` call | Must Have |
 | M10.6 | Streaming support | Implement SSE streaming for `/generate/stream` | Must Have |
