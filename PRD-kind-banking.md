@@ -954,12 +954,12 @@ Voice assistant integration is handled by the **`flutter_app_intents`** package,
 
 | Command (example) | Platform | Intent Type | Deep Link | Priority |
 |---|---|---|---|---|
-| "Hey Siri, show my balance in BankApp" | iOS | Query | `bankingapp://balance` | Must Have |
-| "Hey Siri, transfer money in BankApp" | iOS | Action | `bankingapp://transfer` | Must Have |
-| "Hey Siri, pay my bills in BankApp" | iOS | Action | `bankingapp://pay-bills` | Must Have |
-| "Hey Google, show my balance in BankApp" | Android | Query | `bankingapp://balance` | Must Have |
-| "Hey Google, transfer $50 to John in BankApp" | Android | Action | `bankingapp://transfer?to=John&amount=50` | Should Have |
-| "Hey Siri, show my cards in BankApp" | iOS | Navigation | `bankingapp://cards` | Should Have |
+| "Hey Siri, show my balance in BankApp" | iOS | Query | `kindbanking://balance` | Must Have |
+| "Hey Siri, transfer money in BankApp" | iOS | Action | `kindbanking://transfer` | Must Have |
+| "Hey Siri, pay my bills in BankApp" | iOS | Action | `kindbanking://pay-bills` | Must Have |
+| "Hey Google, show my balance in BankApp" | Android | Query | `kindbanking://balance` | Must Have |
+| "Hey Google, transfer $50 to John in BankApp" | Android | Action | `kindbanking://transfer?to=John&amount=50` | Should Have |
+| "Hey Siri, show my cards in BankApp" | iOS | Navigation | `kindbanking://cards` | Should Have |
 
 #### 5.3.3 Intent Registration (Dart API)
 
@@ -977,7 +977,7 @@ class BankingIntents {
         description: 'Display account balance',
         type: IntentType.query,
         phrases: ['show my balance', 'check balance', 'how much money'],
-        deepLink: 'bankingapp://balance',
+        deepLink: 'kindbanking://balance',
       ),
       AppIntent(
         id: 'transfer_money',
@@ -985,7 +985,7 @@ class BankingIntents {
         description: 'Send money to a contact',
         type: IntentType.action,
         phrases: ['transfer money', 'send money', 'pay someone'],
-        deepLink: 'bankingapp://transfer',
+        deepLink: 'kindbanking://transfer',
         parameters: [
           IntentParameter(name: 'to', type: ParameterType.string),
           IntentParameter(name: 'amount', type: ParameterType.double),
@@ -997,7 +997,7 @@ class BankingIntents {
         description: 'Pay your bills',
         type: IntentType.action,
         phrases: ['pay bills', 'pay my bills'],
-        deepLink: 'bankingapp://pay-bills',
+        deepLink: 'kindbanking://pay-bills',
       ),
       AppIntent(
         id: 'show_cards',
@@ -1005,7 +1005,7 @@ class BankingIntents {
         description: 'View and manage cards',
         type: IntentType.navigation,
         phrases: ['show my cards', 'view cards', 'card management'],
-        deepLink: 'bankingapp://cards',
+        deepLink: 'kindbanking://cards',
       ),
     ]);
   }
@@ -1016,7 +1016,7 @@ class BankingIntents {
 
 1. User speaks to Siri or Google Assistant.
 2. `flutter_app_intents` handles the platform-specific intent resolution.
-3. Intent triggers `bankingapp://` deep link with any parameters.
+3. Intent triggers `kindbanking://` deep link with any parameters.
 4. `app_links` delivers the URI to Flutter (cold start or resume).
 5. `go_router` checks auth state via redirect guard.
 6. If unauthenticated: navigate to `/login`, then redirect to original URI after success.
@@ -1037,7 +1037,275 @@ class BankingIntents {
 
 ---
 
-### 5.4 Chat Assistant (MCP-Powered)
+### 5.4 Deep Linking Architecture
+
+Deep linking is the **foundation for all navigation** — from voice assistants, push notifications, widgets, and external apps. This section defines the complete URI scheme and routing behavior.
+
+#### 5.4.1 URI Scheme Definition
+
+| Type | Scheme | Example |
+|---|---|---|
+| **Custom Scheme** | `kindbanking://` | `kindbanking://transfer?to=John&amount=50` |
+| **Universal Links (iOS)** | `https://app.kindbanking.com/` | `https://app.kindbanking.com/balance` |
+| **App Links (Android)** | `https://app.kindbanking.com/` | `https://app.kindbanking.com/cards` |
+
+#### 5.4.2 Supported Deep Link Routes
+
+| Route | Parameters | Description | Auth Required | Priority |
+|---|---|---|---|---|
+| `kindbanking://hub` | — | Navigate to main hub screen | Yes | Must Have |
+| `kindbanking://balance` | `account_id?` | Show account balance (default: primary) | Yes | Must Have |
+| `kindbanking://transfer` | `to?`, `amount?`, `account_id?` | Open transfer screen, pre-fill if params provided | Yes | Must Have |
+| `kindbanking://transfer/confirm` | `transfer_id` | Confirm pending transfer | Yes | Must Have |
+| `kindbanking://pay-bills` | `biller_id?`, `amount?` | Open bill payment screen | Yes | Must Have |
+| `kindbanking://transactions` | `account_id?`, `filter?` | Show transaction history | Yes | Must Have |
+| `kindbanking://transactions/:id` | — | Show specific transaction detail | Yes | Must Have |
+| `kindbanking://cards` | — | Show all cards | Yes | Must Have |
+| `kindbanking://cards/:id` | `action?` (freeze/unfreeze) | Show card detail, optionally perform action | Yes | Must Have |
+| `kindbanking://chat` | `prompt?` | Open chat, optionally pre-fill prompt | Yes | Should Have |
+| `kindbanking://settings` | `section?` | Open settings, optionally jump to section | Yes | Should Have |
+| `kindbanking://settings/privacy` | — | Privacy level settings | Yes | Should Have |
+| `kindbanking://login` | `redirect?` | Login screen with optional redirect after auth | No | Must Have |
+
+#### 5.4.3 Deep Link Handler Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Deep Link Sources                            │
+├──────────────┬──────────────┬──────────────┬───────────────────────┤
+│ Siri/Google  │    Push      │   Widgets    │   External Apps       │
+│  Assistant   │ Notification │  (iOS/And)   │   (Web, Email)        │
+└──────┬───────┴──────┬───────┴──────┬───────┴───────────┬───────────┘
+       │              │              │                   │
+       ▼              ▼              ▼                   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    app_links Package                                │
+│              (Unified deep link reception)                          │
+└─────────────────────────────┬───────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   DeepLinkHandler                                   │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐ │
+│  │ URI Parser  │→ │ Route       │→ │ Parameter Validator         │ │
+│  │             │  │ Matcher     │  │ (type, range, sanitization) │ │
+│  └─────────────┘  └─────────────┘  └─────────────────────────────┘ │
+└─────────────────────────────┬───────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Auth Gate (go_router redirect)                   │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ IF route.requiresAuth AND !isAuthenticated:                 │   │
+│  │   → Store intended destination                               │   │
+│  │   → Redirect to /login?redirect=<encoded_uri>                │   │
+│  │   → After auth success: navigate to stored destination       │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────┬───────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    go_router Navigation                             │
+│         (Navigate to screen with validated parameters)              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 5.4.4 Deep Link Handler Implementation
+
+```dart
+// lib/core/routing/deep_link_handler.dart
+
+class DeepLinkHandler {
+  final GoRouter _router;
+  final AuthBloc _authBloc;
+
+  /// Supported routes with their configurations
+  static const Map<String, DeepLinkConfig> _routes = {
+    '/hub': DeepLinkConfig(requiresAuth: true),
+    '/balance': DeepLinkConfig(
+      requiresAuth: true,
+      params: ['account_id'],
+    ),
+    '/transfer': DeepLinkConfig(
+      requiresAuth: true,
+      params: ['to', 'amount', 'account_id'],
+    ),
+    '/pay-bills': DeepLinkConfig(
+      requiresAuth: true,
+      params: ['biller_id', 'amount'],
+    ),
+    '/transactions': DeepLinkConfig(
+      requiresAuth: true,
+      params: ['account_id', 'filter'],
+    ),
+    '/cards': DeepLinkConfig(requiresAuth: true),
+    '/chat': DeepLinkConfig(
+      requiresAuth: true,
+      params: ['prompt'],
+    ),
+    '/settings': DeepLinkConfig(
+      requiresAuth: true,
+      params: ['section'],
+    ),
+    '/login': DeepLinkConfig(
+      requiresAuth: false,
+      params: ['redirect'],
+    ),
+  };
+
+  Future<void> handleDeepLink(Uri uri) async {
+    // 1. Normalize URI (custom scheme or universal link)
+    final path = _normalizePath(uri);
+
+    // 2. Match route
+    final config = _matchRoute(path);
+    if (config == null) {
+      _router.go('/hub'); // Fallback to hub for unknown routes
+      return;
+    }
+
+    // 3. Validate and sanitize parameters
+    final params = _validateParams(uri.queryParameters, config);
+
+    // 4. Build destination URI
+    final destination = _buildDestination(path, params);
+
+    // 5. Navigate (go_router handles auth redirect)
+    _router.go(destination);
+  }
+
+  String _normalizePath(Uri uri) {
+    // Handle both custom scheme and universal links
+    if (uri.scheme == 'kindbanking') {
+      return '/${uri.host}${uri.path}';
+    }
+    return uri.path;
+  }
+
+  Map<String, String> _validateParams(
+    Map<String, String> raw,
+    DeepLinkConfig config,
+  ) {
+    final validated = <String, String>{};
+    for (final key in config.params) {
+      if (raw.containsKey(key)) {
+        final value = raw[key]!;
+        // Sanitize: remove potential injection characters
+        final sanitized = value.replaceAll(RegExp(r'[<>"\']'), '');
+        // Validate amount if present
+        if (key == 'amount') {
+          final amount = double.tryParse(sanitized);
+          if (amount != null && amount > 0 && amount <= 100000) {
+            validated[key] = sanitized;
+          }
+        } else {
+          validated[key] = sanitized;
+        }
+      }
+    }
+    return validated;
+  }
+}
+
+class DeepLinkConfig {
+  final bool requiresAuth;
+  final List<String> params;
+
+  const DeepLinkConfig({
+    required this.requiresAuth,
+    this.params = const [],
+  });
+}
+```
+
+#### 5.4.5 Platform Configuration
+
+**iOS (Info.plist)**
+```xml
+<!-- Custom URL Scheme -->
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>kindbanking</string>
+    </array>
+  </dict>
+</array>
+
+<!-- Universal Links -->
+<key>com.apple.developer.associated-domains</key>
+<array>
+  <string>applinks:app.kindbanking.com</string>
+</array>
+```
+
+**Android (AndroidManifest.xml)**
+```xml
+<!-- Custom URL Scheme -->
+<intent-filter>
+  <action android:name="android.intent.action.VIEW"/>
+  <category android:name="android.intent.category.DEFAULT"/>
+  <category android:name="android.intent.category.BROWSABLE"/>
+  <data android:scheme="kindbanking"/>
+</intent-filter>
+
+<!-- App Links -->
+<intent-filter android:autoVerify="true">
+  <action android:name="android.intent.action.VIEW"/>
+  <category android:name="android.intent.category.DEFAULT"/>
+  <category android:name="android.intent.category.BROWSABLE"/>
+  <data android:scheme="https" android:host="app.kindbanking.com"/>
+</intent-filter>
+```
+
+**Apple App Site Association (AASA) — app.kindbanking.com/.well-known/apple-app-site-association**
+```json
+{
+  "applinks": {
+    "apps": [],
+    "details": [{
+      "appID": "TEAMID.com.kindbanking.app",
+      "paths": ["/balance", "/transfer/*", "/pay-bills", "/transactions/*", "/cards/*", "/chat", "/settings/*"]
+    }]
+  }
+}
+```
+
+**Android Asset Links — app.kindbanking.com/.well-known/assetlinks.json**
+```json
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.kindbanking.app",
+    "sha256_cert_fingerprints": ["SHA256_FINGERPRINT_HERE"]
+  }
+}]
+```
+
+#### 5.4.6 Deep Linking Requirements
+
+| ID | Requirement | Details | Priority |
+|---|---|---|---|
+| DEEP-01 | Custom URL scheme | Register `kindbanking://` scheme on both platforms | Must Have |
+| DEEP-02 | Universal Links (iOS) | Configure AASA for `app.kindbanking.com` | Must Have |
+| DEEP-03 | App Links (Android) | Configure asset links for `app.kindbanking.com` | Must Have |
+| DEEP-04 | Route registry | Central registry of all supported routes with parameters | Must Have |
+| DEEP-05 | Auth gate integration | Redirect to login for protected routes, then resume | Must Have |
+| DEEP-06 | Parameter validation | Sanitize and validate all deep link parameters | Must Have |
+| DEEP-07 | Parameter pre-fill | Pre-populate screen fields from deep link params | Must Have |
+| DEEP-08 | Fallback handling | Unknown routes → hub; invalid params → screen defaults | Must Have |
+| DEEP-09 | Cold start handling | Handle deep links when app not running | Must Have |
+| DEEP-10 | Warm start handling | Handle deep links when app in background | Must Have |
+| DEEP-11 | Siri integration | All voice commands map to deep links | Must Have |
+| DEEP-12 | In-app action links | Internal navigation uses same deep link system | Should Have |
+| DEEP-13 | Deep link testing | Automated tests for all routes and parameter combos | Should Have |
+| DEEP-14 | Analytics tracking | Track deep link source and destination | Should Have |
+
+---
+
+### 5.5 Chat Assistant (MCP-Powered)
 
 The chat assistant is accessible via the hub FAB. It accepts both text and voice input. **All LLM interactions go through the MCP Server**, which routes requests to the appropriate provider based on privacy level and availability. The app is completely unaware of which provider is serving the response.
 
@@ -1056,15 +1324,15 @@ The chat assistant is accessible via the hub FAB. It accepts both text and voice
 
 ---
 
-### 5.5 Banking Features
+### 5.6 Banking Features
 
 | Feature | Key Screens / Flows | Deep Link | Priority |
 |---|---|---|---|
-| Account balance & summary | Balance tile on hub, dedicated balance screen with account breakdown | `bankingapp://balance` | Must Have |
-| Transfer money | Payee selector, amount entry, confirmation, success. Pre-fillable via deep link. | `bankingapp://transfer` | Must Have |
-| Transaction history | Paginated list, date and type filters, transaction detail sheet | `bankingapp://transactions` | Must Have |
-| Pay bills | Biller list, scheduled vs immediate, amount and date selection, confirmation | `bankingapp://pay-bills` | Must Have |
-| Card management | Card list, freeze/unfreeze toggle, spend limits, virtual card number reveal | `bankingapp://cards` | Must Have |
+| Account balance & summary | Balance tile on hub, dedicated balance screen with account breakdown | `kindbanking://balance` | Must Have |
+| Transfer money | Payee selector, amount entry, confirmation, success. Pre-fillable via deep link. | `kindbanking://transfer` | Must Have |
+| Transaction history | Paginated list, date and type filters, transaction detail sheet | `kindbanking://transactions` | Must Have |
+| Pay bills | Biller list, scheduled vs immediate, amount and date selection, confirmation | `kindbanking://pay-bills` | Must Have |
+| Card management | Card list, freeze/unfreeze toggle, spend limits, virtual card number reveal | `kindbanking://cards` | Must Have |
 
 ---
 
@@ -2133,7 +2401,7 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 
 **Goal:** Demo-ready app with working on-device AI chat
 
-**Duration:** ~5.5 weeks
+**Duration:** ~6.5 weeks
 
 #### M1 — Foundation (1 week)
 
@@ -2147,12 +2415,42 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 | M1.6 | **Mockoon setup** | Create Mockoon environment files, configure endpoints, test connection | Must Have |
 | M1.7 | **Environment config** | Create `AppConfig` with dev/staging/prod base URLs | Must Have |
 | M1.8 | **API client** | Create Dio-based API client with Mockoon integration | Must Have |
-| M1.9 | Biometric auth | Implement `local_auth` for Face ID / Fingerprint | Must Have |
-| M1.10 | PIN fallback | Implement 6-digit PIN entry with secure storage | Must Have |
-| M1.11 | Auth gate | Create route guard for protected screens | Must Have |
-| M1.12 | Session management | Implement token storage, session timeout | Should Have |
+| M1.9 | **Simple login screen** | Username/password form, calls Mockoon `/auth/login` | Must Have |
+| M1.10 | **Auth state management** | Store auth token, isAuthenticated flag, user info | Must Have |
+| M1.11 | **Auth gate** | Route guard redirects to login if not authenticated | Must Have |
+| M1.12 | **Logout flow** | Clear auth state, redirect to login screen | Must Have |
+| M1.13 | **Dev shortcuts** | Quick login button for testing (dev mode only) | Should Have |
 
-**M1 Deliverable:** App launches with Mockoon backend, user can authenticate with biometric/PIN
+**M1 Deliverable:** App launches with simple login, easy to test auth/non-auth states
+
+> **Note:** Simple login is for development/demo. Biometric authentication and PIN fallback are added in Phase 3 (M12) for production readiness.
+
+---
+
+#### M1b — Deep Linking (1 week) ⚡ HIGH PRIORITY
+
+Deep linking is foundational for voice assistant navigation, in-app actions, and testing. Must be completed before voice integration (M5).
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M1b.1 | **URI scheme registration** | Configure `kindbanking://` custom scheme (iOS Info.plist, Android Manifest) | Must Have |
+| M1b.2 | **app_links integration** | Setup `app_links` package for unified deep link reception | Must Have |
+| M1b.3 | **DeepLinkHandler class** | Create central handler with URI parsing, route matching, param validation | Must Have |
+| M1b.4 | **Route registry** | Define all supported routes with parameters and auth requirements | Must Have |
+| M1b.5 | **Auth gate integration** | Intercept protected routes, redirect to login, resume after auth | Must Have |
+| M1b.6 | **Parameter sanitization** | Validate and sanitize all deep link parameters (prevent injection) | Must Have |
+| M1b.7 | **Parameter pre-fill** | Pass validated params to screens for form pre-population | Must Have |
+| M1b.8 | **Cold start handling** | Handle deep links when app is not running | Must Have |
+| M1b.9 | **Warm start handling** | Handle deep links when app is in background | Must Have |
+| M1b.10 | **Fallback behavior** | Unknown routes → hub; invalid params → screen defaults | Must Have |
+| M1b.11 | **Universal Links (iOS)** | Configure AASA file for `app.kindbanking.com` | Should Have |
+| M1b.12 | **App Links (Android)** | Configure asset links for `app.kindbanking.com` | Should Have |
+| M1b.13 | **Deep link test harness** | Dev screen to test all deep link routes manually | Should Have |
+| M1b.14 | **In-app navigation** | Internal navigation uses deep link system (consistency) | Should Have |
+
+**M1b Deliverable:** Complete deep linking infrastructure ready for voice assistant integration
+
+> **Note:** Deep linking enables "Hey Siri, show my balance" to work seamlessly. This must be done before M5 (Siri Integration).
 
 ---
 
@@ -2335,7 +2633,7 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 
 **Goal:** Full hybrid architecture with backend MCP server
 
-**Duration:** ~3.5 weeks (Flutter) + ~5 weeks (Backend, parallel)
+**Duration:** ~4.5 weeks (Flutter) + ~5 weeks (Backend, parallel)
 
 #### M9 — Local LLM Router (1 week)
 
@@ -2386,6 +2684,26 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 | M11.7 | End-to-end testing | Test all routing scenarios | Must Have |
 
 **M11 Deliverable:** ✅ **PRODUCTION READY** — Full hybrid LLM architecture
+
+---
+
+#### M12 — Biometric Authentication (1 week)
+
+| Task ID | Task | Description | Priority |
+|---|---|---|---|
+| M12.1 | **Biometric capability check** | Detect Face ID / Touch ID (iOS) and Fingerprint / Face (Android) availability | Must Have |
+| M12.2 | **Biometric auth flow** | Implement `local_auth` biometric authentication | Must Have |
+| M12.3 | **PIN fallback** | Secure PIN entry when biometric unavailable or failed | Must Have |
+| M12.4 | **Secure PIN storage** | Store PIN hash in `flutter_secure_storage` | Must Have |
+| M12.5 | **Session timeout** | Auto-lock after configurable inactivity period (default 5 min) | Must Have |
+| M12.6 | **Re-auth on resume** | Biometric prompt when app returns from background after timeout | Must Have |
+| M12.7 | **Failed attempt lockout** | Lock account after N failed biometric/PIN attempts | Must Have |
+| M12.8 | **Biometric settings UI** | Enable/disable biometric, change PIN in settings | Should Have |
+| M12.9 | **Migration flow** | Prompt existing users to enable biometric after login | Should Have |
+
+**M12 Deliverable:** Production-grade biometric security with PIN fallback
+
+> **Note:** Biometric authentication replaces simple login for production. Simple login remains available in development mode via dev shortcuts (M1.13).
 
 ---
 
@@ -2448,30 +2766,32 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 ### Implementation Timeline
 
 ```
-Week  1   2   3   4   5   6   7   8   9   10  11  12  13  14  15
-      ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-      │                                                         │
-      │  PHASE 1: Core App + On-Device LLM                     │
-      │  ══════════════════════════════════                     │
-      │  M1 ████                                                │
-      │  M2     ██████                                          │
-      │  M3           ████████                                  │
-      │  M4                   ████  ← DEMO 1 (On-device AI)    │
-      │                                                         │
-      │  PHASE 2: Voice & Polish                                │
-      │  ═══════════════════════                                │
-      │  M5                       ████                          │
-      │  M6                           ██                        │
-      │  M7                             ████                    │
-      │  M8                                 ██ ← DEMO 2 (Voice) │
-      │                                                         │
-      │  PHASE 3: Enterprise Backend                            │
-      │  ═══════════════════════════                            │
-      │  M9                                     ████            │
-      │  M10                                        ██████      │
-      │  M11                                              ████  │
-      │                                                    ↑    │
-      │                                            PRODUCTION   │
+Week  1   2   3   4   5   6   7   8   9   10  11  12  13  14  15  16
+      ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+      │                                                             │
+      │  PHASE 1: Core App + On-Device LLM                         │
+      │  ══════════════════════════════════                         │
+      │  M1  ████                                                   │
+      │  M1b     ████ ⚡ Deep Linking (HIGH PRIORITY)               │
+      │  M2          ██████                                         │
+      │  M3                ████████                                 │
+      │  M4                        ████  ← DEMO 1 (On-device AI)   │
+      │                                                             │
+      │  PHASE 2: Voice & Polish                                    │
+      │  ═══════════════════════                                    │
+      │  M5                            ████                         │
+      │  M6                                ██                       │
+      │  M7                                  ████                   │
+      │  M8                                      ██ ← DEMO 2 (Voice)│
+      │                                                             │
+      │  PHASE 3: Enterprise Backend                                │
+      │  ═══════════════════════════                                │
+      │  M9                                          ████           │
+      │  M10                                             ██████     │
+      │  M11                                                   ████ │
+      │  M12                                                     ████
+      │                                                          ↑  │
+      │                                                  PRODUCTION │
       │                                                         │
       │  BACKEND (Parallel)                                     │
       │  ══════════════════                                     │
@@ -2491,17 +2811,17 @@ LEGEND:
 
 | Demo | When | What Works | Key Talking Points |
 |---|---|---|---|
-| **Demo 1** | Week 5.5 | On-device LLM chat | "AI chat works in airplane mode, data never leaves device" |
-| **Demo 2** | Week 8.5 | Voice + Polish | "Hey Siri, show my balance" + voice chat |
-| **Production** | Week 12 | Full hybrid | Enterprise-ready with cloud fallback, audit logging |
+| **Demo 1** | Week 6.5 | On-device LLM chat + deep linking | "AI chat works in airplane mode, data never leaves device" + full deep link navigation |
+| **Demo 2** | Week 9.5 | Voice + Polish | "Hey Siri, show my balance" works via deep linking + voice chat |
+| **Production** | Week 14 | Full hybrid + biometric | Enterprise-ready with cloud fallback, biometric auth, audit logging |
 
 ### Resource Requirements
 
 | Role | Phase 1 | Phase 2 | Phase 3 | Total |
 |---|---|---|---|---|
-| Flutter Developer | 5.5 weeks | 3 weeks | 3.5 weeks | 12 weeks |
+| Flutter Developer | 6.5 weeks | 3 weeks | 4.5 weeks | 14 weeks |
 | Backend Developer | — | — | 5 weeks | 5 weeks |
-| QA Engineer | 0.5 weeks | 0.5 weeks | 1 week | 2 weeks |
+| QA Engineer | 0.5 weeks | 0.5 weeks | 1.5 weeks | 2.5 weeks |
 | Designer (support) | As needed | As needed | — | — |
 
 > **Note:** Backend development (B1-B4) can run **in parallel** with Flutter Phase 2 and Phase 3, reducing total calendar time.
