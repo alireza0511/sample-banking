@@ -2488,22 +2488,22 @@ Deep linking is foundational for voice assistant navigation, in-app actions, and
 
 | Task ID | Task | Description | Priority | Status |
 |---|---|---|---|---|
-| M1b.1 | **URI scheme registration** | Configure `kindbanking://` custom scheme (iOS Info.plist, Android Manifest) | Must Have | |
-| M1b.2 | **app_links integration** | Setup `app_links` package for unified deep link reception | Must Have | |
+| M1b.1 | **URI scheme registration** | Configure `kindbanking://` custom scheme (iOS Info.plist, Android Manifest) | Must Have | ✅ Done |
+| M1b.2 | **app_links integration** | Setup `app_links` package for unified deep link reception | Must Have | ✅ Done |
 | M1b.3 | **DeepLinkHandler class** | Create central handler with URI parsing, route matching, param validation | Must Have | ✅ Done |
 | M1b.4 | **Route registry** | Define all supported routes with parameters and auth requirements | Must Have | ✅ Done |
 | M1b.5 | **Auth gate integration** | Intercept protected routes, redirect to login, resume after auth | Must Have | ✅ Done |
 | M1b.6 | **Parameter sanitization** | Validate and sanitize all deep link parameters (prevent injection) | Must Have | ✅ Done |
-| M1b.7 | **Parameter pre-fill** | Pass validated params to screens for form pre-population | Must Have | |
-| M1b.8 | **Cold start handling** | Handle deep links when app is not running | Must Have | |
-| M1b.9 | **Warm start handling** | Handle deep links when app is in background | Must Have | |
+| M1b.7 | **Parameter pre-fill** | Pass validated params to screens for form pre-population | Must Have | ✅ Done |
+| M1b.8 | **Cold start handling** | Handle deep links when app is not running | Must Have | ✅ Done |
+| M1b.9 | **Warm start handling** | Handle deep links when app is in background | Must Have | ✅ Done |
 | M1b.10 | **Fallback behavior** | Unknown routes → hub; invalid params → screen defaults | Must Have | ✅ Done |
-| M1b.11 | **Universal Links (iOS)** | Configure AASA file for `app.kindbanking.com` | Should Have | |
-| M1b.12 | **App Links (Android)** | Configure asset links for `app.kindbanking.com` | Should Have | |
-| M1b.13 | **Deep link test harness** | Dev screen to test all deep link routes manually | Should Have | |
-| M1b.14 | **In-app navigation** | Internal navigation uses deep link system (consistency) | Should Have | |
+| M1b.11 | **Universal Links (iOS)** | Configure AASA file for `app.kindbanking.com` | Should Have | ✅ Done |
+| M1b.12 | **App Links (Android)** | Configure asset links for `app.kindbanking.com` | Should Have | ✅ Done |
+| M1b.13 | **Deep link test harness** | Dev screen to test all deep link routes manually | Should Have | ✅ Done |
+| M1b.14 | **In-app navigation** | Internal navigation uses deep link system (consistency) | Should Have | ✅ Done |
 
-**Progress: 5/14 tasks complete**
+**Progress: 14/14 tasks complete** ✅
 
 **M1b Deliverable:** Complete deep linking infrastructure ready for voice assistant integration
 

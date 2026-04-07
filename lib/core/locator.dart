@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import 'config/app_config.dart';
 import 'network/api_client.dart';
+import 'routing/deep_link_service.dart';
 
 /// Dependency injection setup using Provider
 /// All services and repositories are registered here
@@ -10,11 +11,18 @@ class AppLocator {
   AppLocator._();
 
   static ApiClient? _apiClient;
+  static DeepLinkService? _deepLinkService;
 
   /// Get the shared ApiClient instance
   static ApiClient get apiClient {
     _apiClient ??= ApiClient();
     return _apiClient!;
+  }
+
+  /// Get the shared DeepLinkService instance
+  static DeepLinkService get deepLinkService {
+    _deepLinkService ??= DeepLinkService();
+    return _deepLinkService!;
   }
 
   /// Initialize all dependencies
@@ -24,12 +32,19 @@ class AppLocator {
 
     // Initialize API client
     _apiClient = ApiClient();
+
+    // Initialize deep link service
+    _deepLinkService = DeepLinkService();
+    await _deepLinkService!.init();
   }
 
   /// Get all providers for the app
   static List<SingleChildWidget> get providers => [
         // API Client provider (singleton)
         Provider<ApiClient>.value(value: apiClient),
+
+        // Deep Link Service provider (singleton)
+        Provider<DeepLinkService>.value(value: deepLinkService),
 
         // Auth state provider
         ChangeNotifierProxyProvider<ApiClient, AuthStateNotifier>(

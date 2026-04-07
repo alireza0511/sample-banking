@@ -20,6 +20,9 @@ class Routes {
   static const String settings = '/settings';
   static const String settingsPrivacy = '/settings/privacy';
 
+  // Dev routes (only available in debug mode)
+  static const String devDeepLinkTest = '/dev/deep-links';
+
   // Initial route
   static const String initial = hub;
 }

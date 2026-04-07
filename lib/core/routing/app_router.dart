@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'routes.dart';
 import 'deep_link_handler.dart';
 import '../../auth/ui/login_screen.dart';
 import '../../hub/ui/hub_screen.dart';
+import '../../dev/deep_link_test_screen.dart';
 
 /// App router configuration using go_router
 /// Handles navigation, deep links, and auth redirects
@@ -226,6 +228,14 @@ class AppRouter {
           ),
         ],
       ),
+
+      // Dev routes (debug mode only)
+      if (kDebugMode)
+        GoRoute(
+          path: Routes.devDeepLinkTest,
+          name: 'devDeepLinkTest',
+          builder: (context, state) => const DeepLinkTestScreen(),
+        ),
     ],
 
     // Error handling
