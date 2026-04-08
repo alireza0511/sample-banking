@@ -7,9 +7,10 @@ import '../../auth/ui/login_screen.dart';
 import '../../balance/ui/balance_screen.dart';
 import '../../bills/ui/bills_screen.dart';
 import '../../cards/ui/cards_screen.dart';
+import '../../chat/ui/chat_screen.dart';
 import '../../transactions/ui/transactions_screen.dart';
 import '../../transfer/ui/transfer_screen.dart';
-import '../../hub/ui/hub_screen.dart';
+import '../../hub/ui/simple_hub_screen.dart';
 import '../../dev/deep_link_test_screen.dart';
 
 /// App router configuration using go_router
@@ -90,11 +91,11 @@ class AppRouter {
         },
       ),
 
-      // Hub (main screen)
+      // Hub (main screen) - using SimpleHubScreen until dynamic hub is developed
       GoRoute(
         path: Routes.hub,
         name: 'hub',
-        builder: (context, state) => const HubScreen(),
+        builder: (context, state) => const SimpleHubScreen(),
       ),
 
       // Balance screen
@@ -203,10 +204,7 @@ class AppRouter {
         name: 'chat',
         builder: (context, state) {
           final prompt = state.uri.queryParameters[RouteParams.prompt];
-          return _PlaceholderScreen(
-            title: 'Chat',
-            params: {'prompt': prompt},
-          );
+          return ChatScreen(initialPrompt: prompt);
         },
       ),
 

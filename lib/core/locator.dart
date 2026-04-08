@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import 'config/app_config.dart';
+import 'llm/llm_manager.dart';
 import 'network/api_client.dart';
 import 'routing/deep_link_service.dart';
 
@@ -12,6 +13,7 @@ class AppLocator {
 
   static ApiClient? _apiClient;
   static DeepLinkService? _deepLinkService;
+  static LlmManager? _llmManager;
 
   /// Get the shared ApiClient instance
   static ApiClient get apiClient {
@@ -25,6 +27,12 @@ class AppLocator {
     return _deepLinkService!;
   }
 
+  /// Get the shared LlmManager instance
+  static LlmManager get llmManager {
+    _llmManager ??= LlmManager();
+    return _llmManager!;
+  }
+
   /// Initialize all dependencies
   static Future<void> init() async {
     // Set environment (can be configured via build flags)
@@ -36,6 +44,10 @@ class AppLocator {
     // Initialize deep link service
     _deepLinkService = DeepLinkService();
     await _deepLinkService!.init();
+
+    // Initialize LLM manager with fallback chain
+    _llmManager = LlmManager();
+    await _llmManager!.initialize();
   }
 
   /// Get all providers for the app
@@ -45,6 +57,9 @@ class AppLocator {
 
         // Deep Link Service provider (singleton)
         Provider<DeepLinkService>.value(value: deepLinkService),
+
+        // LLM Manager provider (singleton with fallback chain)
+        Provider<LlmManager>.value(value: llmManager),
 
         // Auth state provider
         ChangeNotifierProxyProvider<ApiClient, AuthStateNotifier>(

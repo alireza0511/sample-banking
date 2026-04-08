@@ -1,0 +1,606 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_spacing.dart';
+import '../../core/widgets/widgets.dart';
+import '../bloc/chat_bloc.dart';
+import '../model/chat_message.dart';
+
+/// Chat screen with AI assistant
+class ChatScreen extends StatefulWidget {
+  /// Optional initial prompt (from deep link)
+  final String? initialPrompt;
+
+  const ChatScreen({super.key, this.initialPrompt});
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  late final ChatBloc _bloc;
+  final TextEditingController _inputController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _inputFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _bloc = ChatBloc();
+
+    // Handle initial prompt from deep link
+    if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _inputController.text = widget.initialPrompt!;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _bloc.dispose();
+    _inputController.dispose();
+    _scrollController.dispose();
+    _inputFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _sendMessage() {
+    final message = _inputController.text.trim();
+    if (message.isEmpty) return;
+
+    _bloc.sendMessagePipe.send(message);
+    _inputController.clear();
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Provider<ChatBloc>.value(
+      value: _bloc,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Chat'),
+          actions: [
+            StreamBuilder<ChatViewModel>(
+              stream: _bloc.viewModelPipe.receive,
+              builder: (context, snapshot) {
+                final viewModel = snapshot.data;
+                return _PrivacyIndicator(
+                  isOnDevice: viewModel?.isOnDevice ?? false,
+                  providerName: viewModel?.privacyText ?? 'AI',
+                );
+              },
+            ),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'clear') {
+                  _bloc.clearChatPipe.launch();
+                } else if (value == 'refresh') {
+                  _bloc.refreshPipe.launch();
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'clear',
+                  child: Text('Clear chat'),
+                ),
+                const PopupMenuItem(
+                  value: 'refresh',
+                  child: Text('Refresh AI status'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: StreamBuilder<ChatViewModel>(
+                stream: _bloc.viewModelPipe.receive,
+                builder: (context, snapshot) {
+                  final viewModel = snapshot.data;
+
+                  if (viewModel == null || viewModel.isLoading) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: AppSpacing.md),
+                          Text('Initializing AI...'),
+                        ],
+                      ),
+                    );
+                  }
+
+                  if (!viewModel.isLlmAvailable) {
+                    return ErrorView(
+                      message: viewModel.errorMessage ?? 'AI assistant is not available',
+                      onRetry: () => _bloc.refreshPipe.launch(),
+                    );
+                  }
+
+                  if (viewModel.isEmpty) {
+                    return const _WelcomeView();
+                  }
+
+                  return _ChatMessageList(
+                    messages: viewModel.messages,
+                    isTyping: viewModel.isTyping,
+                    scrollController: _scrollController,
+                    onRetry: () => _bloc.retryPipe.launch(),
+                  );
+                },
+              ),
+            ),
+            StreamBuilder<ChatViewModel>(
+              stream: _bloc.viewModelPipe.receive,
+              builder: (context, snapshot) {
+                final viewModel = snapshot.data;
+                final canSend = viewModel?.canSendMessage ?? false;
+
+                return _ChatInput(
+                  controller: _inputController,
+                  focusNode: _inputFocusNode,
+                  enabled: canSend,
+                  isTyping: viewModel?.isTyping ?? false,
+                  onSend: _sendMessage,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Privacy indicator badge
+class _PrivacyIndicator extends StatelessWidget {
+  final bool isOnDevice;
+  final String providerName;
+
+  const _PrivacyIndicator({
+    required this.isOnDevice,
+    required this.providerName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: isOnDevice
+            ? AppColors.privacyOnDevice.withValues(alpha: 0.1)
+            : AppColors.privacyCloud.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(
+          color: isOnDevice ? AppColors.privacyOnDevice : AppColors.privacyCloud,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isOnDevice ? Icons.phone_android : Icons.cloud_outlined,
+            size: 14,
+            color: isOnDevice ? AppColors.privacyOnDevice : AppColors.privacyCloud,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            providerName,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: isOnDevice ? AppColors.privacyOnDevice : AppColors.privacyCloud,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Welcome view shown when chat is empty
+class _WelcomeView extends StatelessWidget {
+  const _WelcomeView();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.screenPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.xl),
+
+          // Welcome icon
+          Center(
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline,
+                size: 40,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+
+          // Title
+          Center(
+            child: Text(
+              WelcomeMessage.title,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          // Subtitle
+          Center(
+            child: Text(
+              WelcomeMessage.subtitle,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          // Capabilities
+          ...WelcomeMessage.capabilities.map((capability) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      size: 20,
+                      color: AppColors.success,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      capability,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              )),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          // Privacy note
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.privacyOnDevice.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(
+                color: AppColors.privacyOnDevice.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.security,
+                  color: AppColors.privacyOnDevice,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    WelcomeMessage.privacyNote,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.privacyOnDevice,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// List of chat messages
+class _ChatMessageList extends StatelessWidget {
+  final List<ChatMessage> messages;
+  final bool isTyping;
+  final ScrollController scrollController;
+  final VoidCallback onRetry;
+
+  const _ChatMessageList({
+    required this.messages,
+    required this.isTyping,
+    required this.scrollController,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      controller: scrollController,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenPadding,
+        vertical: AppSpacing.md,
+      ),
+      itemCount: messages.length,
+      itemBuilder: (context, index) {
+        final message = messages[index];
+        return _MessageBubble(
+          message: message,
+          onRetry: message.isError ? onRetry : null,
+        );
+      },
+    );
+  }
+}
+
+/// Single message bubble
+class _MessageBubble extends StatelessWidget {
+  final ChatMessage message;
+  final VoidCallback? onRetry;
+
+  const _MessageBubble({
+    required this.message,
+    this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.isUser;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isUser) ...[
+            _Avatar(isUser: false),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: isUser
+                        ? AppColors.primaryBlue
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(AppSpacing.radiusMd),
+                      topRight: const Radius.circular(AppSpacing.radiusMd),
+                      bottomLeft:
+                          Radius.circular(isUser ? AppSpacing.radiusMd : AppSpacing.radiusSm),
+                      bottomRight:
+                          Radius.circular(isUser ? AppSpacing.radiusSm : AppSpacing.radiusMd),
+                    ),
+                  ),
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.75,
+                  ),
+                  child: message.isPending
+                      ? const _TypingIndicator()
+                      : Text(
+                          message.content,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: isUser ? Colors.white : null,
+                              ),
+                        ),
+                ),
+                if (message.isError && onRetry != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  TextButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Retry'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (isUser) ...[
+            const SizedBox(width: AppSpacing.sm),
+            _Avatar(isUser: true),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Avatar for user or assistant
+class _Avatar extends StatelessWidget {
+  final bool isUser;
+
+  const _Avatar({required this.isUser});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: isUser
+            ? AppColors.primaryBlue.withValues(alpha: 0.1)
+            : AppColors.success.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        isUser ? Icons.person : Icons.smart_toy_outlined,
+        size: 18,
+        color: isUser ? AppColors.primaryBlue : AppColors.success,
+      ),
+    );
+  }
+}
+
+/// Typing indicator animation
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (index) {
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final delay = index * 0.2;
+            final value = ((_controller.value + delay) % 1.0);
+            final opacity = (value < 0.5 ? value : 1 - value) * 2;
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.textTertiary.withValues(alpha: 0.3 + (opacity * 0.7)),
+                shape: BoxShape.circle,
+              ),
+            );
+          },
+        );
+      }),
+    );
+  }
+}
+
+/// Chat input field
+class _ChatInput extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final bool isTyping;
+  final VoidCallback onSend;
+
+  const _ChatInput({
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.isTyping,
+    required this.onSend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: AppSpacing.screenPadding,
+        right: AppSpacing.screenPadding,
+        top: AppSpacing.sm,
+        bottom: MediaQuery.of(context).padding.bottom + AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              enabled: enabled,
+              decoration: InputDecoration(
+                hintText: isTyping ? 'AI is typing...' : 'Type a message...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+              ),
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => onSend(),
+              maxLines: 4,
+              minLines: 1,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, child) {
+              final hasText = value.text.trim().isNotEmpty;
+              return IconButton.filled(
+                onPressed: hasText && enabled ? onSend : null,
+                icon: const Icon(Icons.send),
+                style: IconButton.styleFrom(
+                  backgroundColor: hasText && enabled ? AppColors.primaryBlue : AppColors.divider,
+                  foregroundColor: hasText && enabled ? Colors.white : AppColors.textTertiary,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
