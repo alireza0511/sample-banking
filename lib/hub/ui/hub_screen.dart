@@ -17,23 +17,25 @@ class HubScreen extends StatefulWidget {
 }
 
 class _HubScreenState extends State<HubScreen> {
-  // Default selected actions
+  // Default selected actions - showing key banking features
   List<String> selectedActions = [
-    'Checking Account ***1234\n\$14,250.50',
-    'Zelle',
+    'Accounts',
     'Transfer',
-    'Check Deposit',
+    'Pay Bills',
+    'Cards',
+    'Transactions',
   ];
 
   // All available actions
   final List<String> allActions = [
-    'Checking Account ***1234\n\$14,250.50',
-    'Zelle',
+    'Accounts',
     'Transfer',
-    'Loan Access',
-    'Check Deposit',
     'Pay Bills',
     'Cards',
+    'Transactions',
+    'Zelle',
+    'Loan Access',
+    'Check Deposit',
     'Notification Alert',
     'More',
     'Profile',
@@ -68,19 +70,22 @@ class _HubScreenState extends State<HubScreen> {
   void _handleActionTap(String action) {
     final lowerAction = action.toLowerCase();
 
-    if (lowerAction.contains('checking') || lowerAction.contains('account')) {
+    if (lowerAction.contains('account') || lowerAction.contains('balance')) {
       context.push(Routes.balance);
+    } else if (lowerAction.contains('transaction')) {
+      context.push(Routes.transactions);
     } else if (lowerAction.contains('zelle') || lowerAction.contains('transfer')) {
       context.push(Routes.transfer);
     } else if (lowerAction.contains('pay') || lowerAction.contains('bill')) {
       context.push(Routes.payBills);
     } else if (lowerAction.contains('card')) {
       context.push(Routes.cards);
-    } else if (lowerAction.contains('profile')) {
+    } else if (lowerAction.contains('profile') || lowerAction.contains('setting')) {
       context.push(Routes.settings);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Tapped: $action')),
+        SnackBar(content: Text('$action - Coming soon!'),
+        duration: const Duration(seconds: 1)),
       );
     }
   }

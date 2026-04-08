@@ -4,6 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'routes.dart';
 import 'deep_link_handler.dart';
 import '../../auth/ui/login_screen.dart';
+import '../../balance/ui/balance_screen.dart';
+import '../../bills/ui/bills_screen.dart';
+import '../../cards/ui/cards_screen.dart';
+import '../../transactions/ui/transactions_screen.dart';
+import '../../transfer/ui/transfer_screen.dart';
 import '../../hub/ui/hub_screen.dart';
 import '../../dev/deep_link_test_screen.dart';
 
@@ -98,10 +103,7 @@ class AppRouter {
         name: 'balance',
         builder: (context, state) {
           final accountId = state.uri.queryParameters[RouteParams.accountId];
-          return _PlaceholderScreen(
-            title: 'Balance',
-            params: {'accountId': accountId},
-          );
+          return BalanceScreen(initialAccountId: accountId);
         },
       ),
 
@@ -112,9 +114,9 @@ class AppRouter {
         builder: (context, state) {
           final to = state.uri.queryParameters[RouteParams.to];
           final amount = state.uri.queryParameters[RouteParams.amount];
-          return _PlaceholderScreen(
-            title: 'Transfer',
-            params: {'to': to, 'amount': amount},
+          return TransferScreen(
+            initialRecipient: to,
+            initialAmount: amount,
           );
         },
         routes: [
@@ -140,9 +142,9 @@ class AppRouter {
         builder: (context, state) {
           final accountId = state.uri.queryParameters[RouteParams.accountId];
           final filter = state.uri.queryParameters[RouteParams.filter];
-          return _PlaceholderScreen(
-            title: 'Transactions',
-            params: {'accountId': accountId, 'filter': filter},
+          return TransactionsScreen(
+            accountId: accountId,
+            filter: filter,
           );
         },
       ),
@@ -167,9 +169,9 @@ class AppRouter {
         builder: (context, state) {
           final billerId = state.uri.queryParameters[RouteParams.billerId];
           final amount = state.uri.queryParameters[RouteParams.amount];
-          return _PlaceholderScreen(
-            title: 'Pay Bills',
-            params: {'billerId': billerId, 'amount': amount},
+          return BillsScreen(
+            initialBillerId: billerId,
+            initialAmount: amount,
           );
         },
       ),
@@ -178,7 +180,7 @@ class AppRouter {
       GoRoute(
         path: Routes.cards,
         name: 'cards',
-        builder: (context, state) => const _PlaceholderScreen(title: 'Cards'),
+        builder: (context, state) => const CardsScreen(),
       ),
 
       // Card detail (parameterized route)
