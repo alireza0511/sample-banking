@@ -12,6 +12,7 @@ import '../../transactions/ui/transactions_screen.dart';
 import '../../transfer/ui/transfer_screen.dart';
 import '../../hub/ui/simple_hub_screen.dart';
 import '../../dev/deep_link_test_screen.dart';
+import '../../dev/llm_status_screen.dart';
 
 /// App router configuration using go_router
 /// Handles navigation, deep links, and auth redirects
@@ -230,12 +231,18 @@ class AppRouter {
       ),
 
       // Dev routes (debug mode only)
-      if (kDebugMode)
+      if (kDebugMode) ...[
         GoRoute(
           path: Routes.devDeepLinkTest,
           name: 'devDeepLinkTest',
           builder: (context, state) => const DeepLinkTestScreen(),
         ),
+        GoRoute(
+          path: Routes.devLlmStatus,
+          name: 'devLlmStatus',
+          builder: (context, state) => const LlmStatusScreen(),
+        ),
+      ],
     ],
 
     // Error handling

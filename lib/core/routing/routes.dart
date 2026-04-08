@@ -22,6 +22,7 @@ class Routes {
 
   // Dev routes (only available in debug mode)
   static const String devDeepLinkTest = '/dev/deep-links';
+  static const String devLlmStatus = '/dev/llm-status';
 
   // Initial route
   static const String initial = hub;
