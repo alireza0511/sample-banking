@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/speech/speech_manager.dart';
 import '../../core/theme/app_colors.dart';
@@ -8,6 +9,7 @@ import '../../core/tts/tts_manager.dart';
 import '../../core/widgets/widgets.dart';
 import '../bloc/chat_bloc.dart';
 import '../model/chat_message.dart';
+import '../services/chat_storage_service.dart';
 
 /// Chat screen with AI assistant
 class ChatScreen extends StatefulWidget {
@@ -33,13 +35,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Create bloc with voice services from Provider
     if (!_blocInitialized) {
-      final speechManager = Provider.of<SpeechManager>(context, listen: false);
-      final ttsManager = Provider.of<TtsManager>(context, listen: false);
-
-      _bloc = ChatBloc(
-        speechManager: speechManager,
-        ttsManager: ttsManager,
-      );
+      _initializeBloc();
       _blocInitialized = true;
 
       // Handle initial prompt from deep link
@@ -49,6 +45,21 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       }
     }
+  }
+
+  Future<void> _initializeBloc() async {
+    final speechManager = Provider.of<SpeechManager>(context, listen: false);
+    final ttsManager = Provider.of<TtsManager>(context, listen: false);
+
+    // Initialize SharedPreferences for chat storage
+    final prefs = await SharedPreferences.getInstance();
+    final storageService = ChatStorageService(prefs);
+
+    _bloc = ChatBloc(
+      speechManager: speechManager,
+      ttsManager: ttsManager,
+      storageService: storageService,
+    );
   }
 
   @override
@@ -85,8 +96,14 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Provider<ChatBloc>.value(
       value: _bloc,
-      child: Scaffold(
-        appBar: AppBar(
+      child: GestureDetector(
+        onTap: () {
+          // Dismiss keyboard when tapping outside
+          FocusScope.of(context).unfocus();
+        },
+        child: Scaffold(
+          resizeToAvoidBottomInset: true,
+          appBar: AppBar(
           title: const Text('Chat'),
           actions: [
             StreamBuilder<ChatViewModel>(
@@ -106,13 +123,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 final viewModel = snapshot.data;
                 final voiceEnabled = viewModel?.voiceOutputEnabled ?? false;
 
-                return IconButton(
-                  onPressed: () => _bloc.toggleVoiceOutputPipe.launch(),
-                  icon: Icon(
-                    voiceEnabled ? Icons.volume_up : Icons.volume_off,
-                    color: voiceEnabled ? AppColors.primaryBlue : null,
+                return Semantics(
+                  label: voiceEnabled
+                      ? 'Voice output enabled. Tap to disable.'
+                      : 'Voice output disabled. Tap to enable.',
+                  button: true,
+                  enabled: true,
+                  child: IconButton(
+                    onPressed: () => _bloc.toggleVoiceOutputPipe.launch(),
+                    icon: Icon(
+                      voiceEnabled ? Icons.volume_up : Icons.volume_off,
+                      color: voiceEnabled ? AppColors.primaryBlue : null,
+                    ),
+                    tooltip: voiceEnabled ? 'Disable voice output' : 'Enable voice output',
                   ),
-                  tooltip: voiceEnabled ? 'Disable voice output' : 'Enable voice output',
                 );
               },
             ),
@@ -197,6 +221,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ],
+        ),
         ),
       ),
     );
@@ -378,20 +403,30 @@ class _ChatMessageList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      controller: scrollController,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenPadding,
-        vertical: AppSpacing.md,
-      ),
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final message = messages[index];
-        return _MessageBubble(
-          message: message,
-          onRetry: message.isError ? onRetry : null,
-        );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollNotification) {
+        // Dismiss keyboard when user starts scrolling
+        if (scrollNotification is ScrollStartNotification) {
+          FocusScope.of(context).unfocus();
+        }
+        return false;
       },
+      child: ListView.builder(
+        controller: scrollController,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenPadding,
+          vertical: AppSpacing.md,
+        ),
+        itemCount: messages.length,
+        itemBuilder: (context, index) {
+          final message = messages[index];
+          return _MessageBubble(
+            message: message,
+            onRetry: message.isError ? onRetry : null,
+          );
+        },
+      ),
     );
   }
 }
@@ -410,9 +445,16 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.isUser;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
+    return Semantics(
+      label: isUser
+          ? 'You said: ${message.content}'
+          : message.isError
+              ? 'Error: ${message.content}'
+              : 'Assistant said: ${message.content}',
+      container: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -472,6 +514,7 @@ class _MessageBubble extends StatelessWidget {
             _Avatar(isUser: true),
           ],
         ],
+        ),
       ),
     );
   }
@@ -642,42 +685,59 @@ class _ChatInput extends StatelessWidget {
           Row(
             children: [
               // Voice input button
-              IconButton(
-                onPressed: enabled ? onToggleVoiceInput : null,
-                icon: Icon(
-                  isListening ? Icons.mic_off : Icons.mic,
-                  color: isListening ? AppColors.error : AppColors.primaryBlue,
+              Semantics(
+                label: isListening
+                    ? 'Listening. Tap to stop voice input.'
+                    : 'Voice input. Tap to start speaking.',
+                button: true,
+                enabled: enabled,
+                child: IconButton(
+                  onPressed: enabled ? onToggleVoiceInput : null,
+                  icon: Icon(
+                    isListening ? Icons.mic_off : Icons.mic,
+                    color: isListening ? AppColors.error : AppColors.primaryBlue,
+                  ),
+                  tooltip: isListening ? 'Stop listening' : 'Voice input',
                 ),
-                tooltip: isListening ? 'Stop listening' : 'Voice input',
               ),
               const SizedBox(width: AppSpacing.xs),
               // Text input
               Expanded(
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
+                child: Semantics(
+                  label: 'Message input field',
+                  hint: isTyping
+                      ? 'AI is typing, please wait'
+                      : isListening
+                          ? 'Voice input active'
+                          : 'Type your message here',
+                  textField: true,
                   enabled: enabled && !isListening,
-                  decoration: InputDecoration(
-                    hintText: isTyping
-                        ? 'AI is typing...'
-                        : isListening
-                            ? 'Listening...'
-                            : 'Type a message...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                      borderSide: BorderSide.none,
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    enabled: enabled && !isListening,
+                    decoration: InputDecoration(
+                      hintText: isTyping
+                          ? 'AI is typing...'
+                          : isListening
+                              ? 'Listening...'
+                              : 'Type a message...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
                     ),
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => onSend(),
+                    maxLines: 4,
+                    minLines: 1,
                   ),
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => onSend(),
-                  maxLines: 4,
-                  minLines: 1,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -686,14 +746,21 @@ class _ChatInput extends StatelessWidget {
                 valueListenable: controller,
                 builder: (context, value, child) {
                   final hasText = value.text.trim().isNotEmpty;
-                  return IconButton.filled(
-                    onPressed: hasText && enabled && !isListening ? onSend : null,
-                    icon: const Icon(Icons.send),
-                    style: IconButton.styleFrom(
-                      backgroundColor:
-                          hasText && enabled && !isListening ? AppColors.primaryBlue : AppColors.divider,
-                      foregroundColor:
-                          hasText && enabled && !isListening ? Colors.white : AppColors.textTertiary,
+                  return Semantics(
+                    label: hasText && enabled && !isListening
+                        ? 'Send message'
+                        : 'Send message. Disabled. Type a message first.',
+                    button: true,
+                    enabled: hasText && enabled && !isListening,
+                    child: IconButton.filled(
+                      onPressed: hasText && enabled && !isListening ? onSend : null,
+                      icon: const Icon(Icons.send),
+                      style: IconButton.styleFrom(
+                        backgroundColor:
+                            hasText && enabled && !isListening ? AppColors.primaryBlue : AppColors.divider,
+                        foregroundColor:
+                            hasText && enabled && !isListening ? Colors.white : AppColors.textTertiary,
+                      ),
                     ),
                   );
                 },

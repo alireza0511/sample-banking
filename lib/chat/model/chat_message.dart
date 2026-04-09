@@ -93,6 +93,30 @@ class ChatMessage extends Equatable {
   /// Check if message failed
   bool get isError => status == MessageStatus.error;
 
+  /// Convert to JSON for storage
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'role': role.name,
+      'content': content,
+      'timestamp': timestamp.toIso8601String(),
+      'status': status.name,
+      'isPrivate': isPrivate,
+    };
+  }
+
+  /// Create from JSON for loading from storage
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: json['id'] as String,
+      role: ChatRole.values.firstWhere((e) => e.name == json['role']),
+      content: json['content'] as String,
+      timestamp: DateTime.parse(json['timestamp'] as String),
+      status: MessageStatus.values.firstWhere((e) => e.name == json['status']),
+      isPrivate: json['isPrivate'] as bool? ?? true,
+    );
+  }
+
   @override
   List<Object?> get props => [id, role, content, timestamp, status, isPrivate];
 }

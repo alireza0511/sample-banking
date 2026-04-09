@@ -7,6 +7,7 @@ import '../../core/llm/llm_service.dart';
 import '../../core/speech/speech_manager.dart';
 import '../../core/tts/tts_manager.dart';
 import '../model/chat_message.dart';
+import '../services/chat_storage_service.dart';
 import 'chat_entity.dart';
 import 'chat_view_model.dart';
 
@@ -16,6 +17,7 @@ class ChatUseCase extends UseCase {
   final LlmManager _llmManager;
   final SpeechManager _speechManager;
   final TtsManager _ttsManager;
+  final ChatStorageService? _storageService;
 
   ChatEntity _entity = ChatEntity();
   StreamSubscription<String>? _streamSubscription;
@@ -42,9 +44,11 @@ If asked to perform an action, guide the user to the appropriate screen.
     LlmManager? llmManager,
     SpeechManager? speechManager,
     TtsManager? ttsManager,
+    ChatStorageService? storageService,
   })  : _llmManager = llmManager ?? LlmManager(),
         _speechManager = speechManager ?? SpeechManager(),
-        _ttsManager = ttsManager ?? TtsManager();
+        _ttsManager = ttsManager ?? TtsManager(),
+        _storageService = storageService;
 
   /// Initialize the chat and check LLM availability
   Future<void> initialize() async {
@@ -52,14 +56,22 @@ If asked to perform an action, guide the user to the appropriate screen.
     _notifyListeners();
 
     try {
+      // Initialize LLM
       await _llmManager.initialize();
 
       final isAvailable = await _llmManager.isAvailable();
+
+      // Load chat history from storage
+      List<ChatMessage> messages = [];
+      if (_storageService != null) {
+        messages = await _storageService.loadMessages();
+      }
 
       _entity = _entity.merge(
         isLoading: false,
         isLlmAvailable: isAvailable,
         providerInfo: _llmManager.providerInfo,
+        messages: messages,
       );
       _notifyListeners();
     } catch (e) {
@@ -138,6 +150,9 @@ If asked to perform an action, guide the user to the appropriate screen.
       );
       _notifyListeners();
 
+      // Save messages to storage
+      await _saveMessages();
+
       // Speak the response if voice output is enabled
       if (_entity.voiceOutputEnabled && assistantMessage.content.isNotEmpty) {
         await _ttsManager.speak(
@@ -198,12 +213,17 @@ If asked to perform an action, guide the user to the appropriate screen.
   }
 
   /// Clear chat history
-  void clearChat() {
+  Future<void> clearChat() async {
     _entity = _entity.merge(
       messages: [],
       errorMessage: null,
     );
     _notifyListeners();
+
+    // Clear storage
+    if (_storageService != null) {
+      await _storageService.clearMessages();
+    }
   }
 
   /// Retry the last failed message
@@ -324,6 +344,13 @@ If asked to perform an action, guide the user to the appropriate screen.
 
   void _notifyListeners() {
     _viewModelCallback(ChatViewModel.fromEntity(_entity));
+  }
+
+  /// Save current messages to storage
+  Future<void> _saveMessages() async {
+    if (_storageService != null) {
+      await _storageService.saveMessages(_entity.messages);
+    }
   }
 
   /// Dispose resources

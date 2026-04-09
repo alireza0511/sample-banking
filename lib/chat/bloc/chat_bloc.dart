@@ -2,6 +2,7 @@ import 'package:clean_framework/clean_framework.dart';
 
 import '../../core/speech/speech_manager.dart';
 import '../../core/tts/tts_manager.dart';
+import '../services/chat_storage_service.dart';
 import 'chat_use_case.dart';
 import 'chat_view_model.dart';
 
@@ -34,11 +35,13 @@ class ChatBloc extends Bloc {
   ChatBloc({
     SpeechManager? speechManager,
     TtsManager? ttsManager,
+    ChatStorageService? storageService,
   }) {
     _useCase = ChatUseCase(
       viewModelPipe.send,
       speechManager: speechManager,
       ttsManager: ttsManager,
+      storageService: storageService,
     );
 
     // Initialize when first listened to
