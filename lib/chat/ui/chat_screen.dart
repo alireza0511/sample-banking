@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/speech/speech_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/tts/tts_manager.dart';
 import '../../core/widgets/widgets.dart';
 import '../bloc/chat_bloc.dart';
 import '../model/chat_message.dart';
@@ -20,20 +22,32 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final ChatBloc _bloc;
+  bool _blocInitialized = false;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
 
   @override
-  void initState() {
-    super.initState();
-    _bloc = ChatBloc();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
 
-    // Handle initial prompt from deep link
-    if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _inputController.text = widget.initialPrompt!;
-      });
+    // Create bloc with voice services from Provider
+    if (!_blocInitialized) {
+      final speechManager = Provider.of<SpeechManager>(context, listen: false);
+      final ttsManager = Provider.of<TtsManager>(context, listen: false);
+
+      _bloc = ChatBloc(
+        speechManager: speechManager,
+        ttsManager: ttsManager,
+      );
+      _blocInitialized = true;
+
+      // Handle initial prompt from deep link
+      if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _inputController.text = widget.initialPrompt!;
+        });
+      }
     }
   }
 
@@ -82,6 +96,23 @@ class _ChatScreenState extends State<ChatScreen> {
                 return _PrivacyIndicator(
                   isOnDevice: viewModel?.isOnDevice ?? false,
                   providerName: viewModel?.privacyText ?? 'AI',
+                );
+              },
+            ),
+            // Voice output toggle
+            StreamBuilder<ChatViewModel>(
+              stream: _bloc.viewModelPipe.receive,
+              builder: (context, snapshot) {
+                final viewModel = snapshot.data;
+                final voiceEnabled = viewModel?.voiceOutputEnabled ?? false;
+
+                return IconButton(
+                  onPressed: () => _bloc.toggleVoiceOutputPipe.launch(),
+                  icon: Icon(
+                    voiceEnabled ? Icons.volume_up : Icons.volume_off,
+                    color: voiceEnabled ? AppColors.primaryBlue : null,
+                  ),
+                  tooltip: voiceEnabled ? 'Disable voice output' : 'Enable voice output',
                 );
               },
             ),
@@ -159,6 +190,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   enabled: canSend,
                   isTyping: viewModel?.isTyping ?? false,
                   onSend: _sendMessage,
+                  isListening: viewModel?.isListening ?? false,
+                  voiceInputText: viewModel?.voiceInputText ?? '',
+                  onToggleVoiceInput: () => _bloc.toggleVoiceInputPipe.launch(),
                 );
               },
             ),
@@ -530,6 +564,9 @@ class _ChatInput extends StatelessWidget {
   final bool enabled;
   final bool isTyping;
   final VoidCallback onSend;
+  final bool isListening;
+  final String voiceInputText;
+  final VoidCallback onToggleVoiceInput;
 
   const _ChatInput({
     required this.controller,
@@ -537,6 +574,9 @@ class _ChatInput extends StatelessWidget {
     required this.enabled,
     required this.isTyping,
     required this.onSend,
+    required this.isListening,
+    required this.voiceInputText,
+    required this.onToggleVoiceInput,
   });
 
   @override
@@ -558,46 +598,107 @@ class _ChatInput extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              enabled: enabled,
-              decoration: InputDecoration(
-                hintText: isTyping ? 'AI is typing...' : 'Type a message...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                  borderSide: BorderSide.none,
+          // Voice input indicator
+          if (isListening) ...[
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.mic,
+                    size: 16,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    'Listening...',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const Spacer(),
+                  if (voiceInputText.isNotEmpty)
+                    Expanded(
+                      child: Text(
+                        voiceInputText,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+          // Input row
+          Row(
+            children: [
+              // Voice input button
+              IconButton(
+                onPressed: enabled ? onToggleVoiceInput : null,
+                icon: Icon(
+                  isListening ? Icons.mic_off : Icons.mic,
+                  color: isListening ? AppColors.error : AppColors.primaryBlue,
                 ),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
+                tooltip: isListening ? 'Stop listening' : 'Voice input',
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              // Text input
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  enabled: enabled && !isListening,
+                  decoration: InputDecoration(
+                    hintText: isTyping
+                        ? 'AI is typing...'
+                        : isListening
+                            ? 'Listening...'
+                            : 'Type a message...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                  ),
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => onSend(),
+                  maxLines: 4,
+                  minLines: 1,
                 ),
               ),
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => onSend(),
-              maxLines: 4,
-              minLines: 1,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, child) {
-              final hasText = value.text.trim().isNotEmpty;
-              return IconButton.filled(
-                onPressed: hasText && enabled ? onSend : null,
-                icon: const Icon(Icons.send),
-                style: IconButton.styleFrom(
-                  backgroundColor: hasText && enabled ? AppColors.primaryBlue : AppColors.divider,
-                  foregroundColor: hasText && enabled ? Colors.white : AppColors.textTertiary,
-                ),
-              );
-            },
+              const SizedBox(width: AppSpacing.sm),
+              // Send button
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller,
+                builder: (context, value, child) {
+                  final hasText = value.text.trim().isNotEmpty;
+                  return IconButton.filled(
+                    onPressed: hasText && enabled && !isListening ? onSend : null,
+                    icon: const Icon(Icons.send),
+                    style: IconButton.styleFrom(
+                      backgroundColor:
+                          hasText && enabled && !isListening ? AppColors.primaryBlue : AppColors.divider,
+                      foregroundColor:
+                          hasText && enabled && !isListening ? Colors.white : AppColors.textTertiary,
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),

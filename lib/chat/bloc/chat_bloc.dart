@@ -1,5 +1,7 @@
 import 'package:clean_framework/clean_framework.dart';
 
+import '../../core/speech/speech_manager.dart';
+import '../../core/tts/tts_manager.dart';
 import 'chat_use_case.dart';
 import 'chat_view_model.dart';
 
@@ -14,6 +16,8 @@ class ChatBloc extends Bloc {
   final clearChatPipe = EventPipe();
   final retryPipe = EventPipe();
   final refreshPipe = EventPipe();
+  final toggleVoiceInputPipe = EventPipe();
+  final toggleVoiceOutputPipe = EventPipe();
 
   @override
   void dispose() {
@@ -22,11 +26,20 @@ class ChatBloc extends Bloc {
     clearChatPipe.dispose();
     retryPipe.dispose();
     refreshPipe.dispose();
+    toggleVoiceInputPipe.dispose();
+    toggleVoiceOutputPipe.dispose();
     _useCase.dispose();
   }
 
-  ChatBloc() {
-    _useCase = ChatUseCase(viewModelPipe.send);
+  ChatBloc({
+    SpeechManager? speechManager,
+    TtsManager? ttsManager,
+  }) {
+    _useCase = ChatUseCase(
+      viewModelPipe.send,
+      speechManager: speechManager,
+      ttsManager: ttsManager,
+    );
 
     // Initialize when first listened to
     viewModelPipe.whenListenedDo(_useCase.initialize);
@@ -46,5 +59,11 @@ class ChatBloc extends Bloc {
 
     // Handle refresh
     refreshPipe.listen(_useCase.refreshLlmStatus);
+
+    // Handle voice input toggle
+    toggleVoiceInputPipe.listen(_useCase.toggleVoiceInput);
+
+    // Handle voice output toggle
+    toggleVoiceOutputPipe.listen(_useCase.toggleVoiceOutput);
   }
 }

@@ -12,6 +12,9 @@ class ChatEntity extends Entity {
   final LlmProviderInfo? providerInfo;
   final bool isLlmAvailable;
   final String currentInput;
+  final bool isListening;
+  final bool voiceOutputEnabled;
+  final String voiceInputText;
 
   ChatEntity({
     List<EntityFailure> errors = const [],
@@ -22,6 +25,9 @@ class ChatEntity extends Entity {
     this.providerInfo,
     this.isLlmAvailable = false,
     this.currentInput = '',
+    this.isListening = false,
+    this.voiceOutputEnabled = false,
+    this.voiceInputText = '',
   }) : super(errors: errors);
 
   @override
@@ -34,6 +40,9 @@ class ChatEntity extends Entity {
     LlmProviderInfo? providerInfo,
     bool? isLlmAvailable,
     String? currentInput,
+    bool? isListening,
+    bool? voiceOutputEnabled,
+    String? voiceInputText,
   }) {
     return ChatEntity(
       errors: errors ?? this.errors,
@@ -44,6 +53,9 @@ class ChatEntity extends Entity {
       providerInfo: providerInfo ?? this.providerInfo,
       isLlmAvailable: isLlmAvailable ?? this.isLlmAvailable,
       currentInput: currentInput ?? this.currentInput,
+      isListening: isListening ?? this.isListening,
+      voiceOutputEnabled: voiceOutputEnabled ?? this.voiceOutputEnabled,
+      voiceInputText: voiceInputText ?? this.voiceInputText,
     );
   }
 
@@ -72,5 +84,8 @@ class ChatEntity extends Entity {
         providerInfo,
         isLlmAvailable,
         currentInput,
+        isListening,
+        voiceOutputEnabled,
+        voiceInputText,
       ];
 }

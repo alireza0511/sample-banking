@@ -4,6 +4,8 @@ import 'package:clean_framework/clean_framework.dart';
 
 import '../../core/llm/llm_manager.dart';
 import '../../core/llm/llm_service.dart';
+import '../../core/speech/speech_manager.dart';
+import '../../core/tts/tts_manager.dart';
 import '../model/chat_message.dart';
 import 'chat_entity.dart';
 import 'chat_view_model.dart';
@@ -12,6 +14,8 @@ import 'chat_view_model.dart';
 class ChatUseCase extends UseCase {
   final ViewModelCallback<ChatViewModel> _viewModelCallback;
   final LlmManager _llmManager;
+  final SpeechManager _speechManager;
+  final TtsManager _ttsManager;
 
   ChatEntity _entity = ChatEntity();
   StreamSubscription<String>? _streamSubscription;
@@ -36,7 +40,11 @@ If asked to perform an action, guide the user to the appropriate screen.
   ChatUseCase(
     this._viewModelCallback, {
     LlmManager? llmManager,
-  }) : _llmManager = llmManager ?? LlmManager();
+    SpeechManager? speechManager,
+    TtsManager? ttsManager,
+  })  : _llmManager = llmManager ?? LlmManager(),
+        _speechManager = speechManager ?? SpeechManager(),
+        _ttsManager = ttsManager ?? TtsManager();
 
   /// Initialize the chat and check LLM availability
   Future<void> initialize() async {
@@ -129,6 +137,16 @@ If asked to perform an action, guide the user to the appropriate screen.
         isTyping: false,
       );
       _notifyListeners();
+
+      // Speak the response if voice output is enabled
+      if (_entity.voiceOutputEnabled && assistantMessage.content.isNotEmpty) {
+        await _ttsManager.speak(
+          assistantMessage.content,
+          onError: (error) {
+            // Silent fail for TTS errors - don't interrupt user experience
+          },
+        );
+      }
     } on LlmError catch (e) {
       _handleError(e.message, pendingMessage.id);
     } catch (e) {
@@ -215,6 +233,92 @@ If asked to perform an action, guide the user to the appropriate screen.
       isLlmAvailable: await _llmManager.isAvailable(),
       providerInfo: _llmManager.providerInfo,
     );
+    _notifyListeners();
+  }
+
+  /// Toggle voice input (start/stop listening)
+  Future<void> toggleVoiceInput() async {
+    if (_entity.isListening) {
+      // Stop listening
+      await _stopVoiceInput();
+    } else {
+      // Start listening
+      await _startVoiceInput();
+    }
+  }
+
+  /// Start voice input
+  Future<void> _startVoiceInput() async {
+    // Check permission first
+    if (!await _speechManager.hasPermission()) {
+      final granted = await _speechManager.requestPermission();
+      if (!granted) {
+        _entity = _entity.merge(
+          errorMessage: 'Microphone permission is required for voice input',
+        );
+        _notifyListeners();
+        return;
+      }
+    }
+
+    _entity = _entity.merge(
+      isListening: true,
+      voiceInputText: '',
+      errorMessage: null,
+    );
+    _notifyListeners();
+
+    try {
+      await _speechManager.startListening(
+        onResult: (result) {
+          // Update partial results
+          _entity = _entity.merge(voiceInputText: result.recognizedWords);
+          _notifyListeners();
+
+          // When final, send the message
+          if (result.isFinal && result.recognizedWords.trim().isNotEmpty) {
+            _stopVoiceInput();
+            sendMessage(result.recognizedWords);
+          }
+        },
+        onError: (error) {
+          _entity = _entity.merge(
+            isListening: false,
+            errorMessage: 'Voice recognition error: $error',
+          );
+          _notifyListeners();
+        },
+        partialResults: true,
+      );
+    } catch (e) {
+      _entity = _entity.merge(
+        isListening: false,
+        errorMessage: 'Failed to start voice input: $e',
+      );
+      _notifyListeners();
+    }
+  }
+
+  /// Stop voice input
+  Future<void> _stopVoiceInput() async {
+    await _speechManager.stopListening();
+    _entity = _entity.merge(
+      isListening: false,
+      voiceInputText: '',
+    );
+    _notifyListeners();
+  }
+
+  /// Toggle voice output (enable/disable TTS)
+  Future<void> toggleVoiceOutput() async {
+    final newValue = !_entity.voiceOutputEnabled;
+
+    // If turning off, stop any ongoing speech
+    if (!newValue && _ttsManager.isSpeaking) {
+      await _ttsManager.stop();
+    }
+
+    _entity = _entity.merge(voiceOutputEnabled: newValue);
     _notifyListeners();
   }
 

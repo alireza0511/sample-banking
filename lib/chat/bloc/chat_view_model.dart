@@ -14,6 +14,9 @@ class ChatViewModel extends ViewModel {
   final bool isLlmAvailable;
   final bool canSendMessage;
   final bool isOnDevice;
+  final bool isListening;
+  final bool voiceOutputEnabled;
+  final String voiceInputText;
 
   ChatViewModel({
     required this.messages,
@@ -24,6 +27,9 @@ class ChatViewModel extends ViewModel {
     required this.isLlmAvailable,
     required this.canSendMessage,
     required this.isOnDevice,
+    required this.isListening,
+    required this.voiceOutputEnabled,
+    required this.voiceInputText,
   });
 
   factory ChatViewModel.fromEntity(ChatEntity entity) {
@@ -36,6 +42,9 @@ class ChatViewModel extends ViewModel {
       isLlmAvailable: entity.isLlmAvailable,
       canSendMessage: entity.canSendMessage,
       isOnDevice: entity.isOnDevice,
+      isListening: entity.isListening,
+      voiceOutputEnabled: entity.voiceOutputEnabled,
+      voiceInputText: entity.voiceInputText,
     );
   }
 
@@ -47,6 +56,9 @@ class ChatViewModel extends ViewModel {
       isLlmAvailable: false,
       canSendMessage: false,
       isOnDevice: false,
+      isListening: false,
+      voiceOutputEnabled: false,
+      voiceInputText: '',
     );
   }
 
@@ -81,5 +93,8 @@ class ChatViewModel extends ViewModel {
         isLlmAvailable,
         canSendMessage,
         isOnDevice,
+        isListening,
+        voiceOutputEnabled,
+        voiceInputText,
       ];
 }

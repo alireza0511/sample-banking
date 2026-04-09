@@ -2460,21 +2460,23 @@ The implementation is structured in **3 phases** to enable early demos with on-d
 | **Phase 1** | M2 — Hub & Navigation | 🔄 In Progress | TBD | Pending implementation |
 | **Phase 1** | M3 — Banking Screens | 🔄 In Progress | TBD | Pending implementation |
 | **Phase 2** | **M4 — Voice Assistants** | ✅ **COMPLETE** | **9/10 tasks** | **Siri integration, deep links, shortcuts** |
-| **Phase 2** | **M5 — Speech Services** | ✅ **CORE COMPLETE** | **5/7 tasks** | **STT/TTS abstraction layers ready** |
-| **Phase 2** | M6 — Enhanced Chat | ⏸️ Not Started | 0/7 tasks | Pending M5 UI integration |
+| **Phase 2** | **M5 — Speech Services** | ✅ **COMPLETE** | **7/7 tasks** | **Full voice chat with STT/TTS integration** |
+| **Phase 2** | M6 — Enhanced Chat | ⏸️ Not Started | 0/7 tasks | Advanced chat features |
 | **Phase 2** | M7 — Polish | ⏸️ Not Started | 0/7 tasks | Final polish pass |
 | **Phase 3** | M8-M14 — Backend | ⏸️ Not Started | 0/XX tasks | Production backend features |
 
 **Key Achievements:**
-- ✅ **M4 Voice Assistants:** Complete Siri integration with deep link infrastructure
-- ✅ **M5 Speech Services:** Clean abstraction layer for STT/TTS (swappable providers)
+- ✅ **M4 Voice Assistants:** Complete Siri integration with deep link infrastructure (9/10 tasks)
+- ✅ **M5 Speech Services:** Full voice chat with STT/TTS integration (7/7 tasks) 🎉
+- ✅ **Voice Chat UI:** Mic button with live transcription + TTS toggle in AppBar
 - ✅ **Architecture:** All voice services following clean architecture patterns
 - ✅ **Documentation:** Comprehensive implementation guides created
+- ✅ **Hands-Free Banking:** Complete voice loop working (speak → AI responds aloud)
 
 **Next Steps:**
-- Integrate voice UI (M5.6-M5.7): Add mic button and voice output toggle to chat
 - Device testing (M4.7): Test Siri commands on physical iPhone
 - Continue Phase 2: Enhanced Chat (M6) and Polish (M7)
+- Production deployment preparation
 
 ---
 
@@ -2734,30 +2736,32 @@ final llmService = OnDeviceLlmProvider();
 
 **M5 Deliverable:** Chat supports voice input and output
 
-**Progress: 5/7 tasks complete** ✅
+**Progress: 7/7 tasks complete** ✅
 
-**Status: CORE SERVICES COMPLETE** 🎉
+**Status: COMPLETE** 🎉
 - ✅ M5.1: SpeechService abstract interface (clean abstraction layer)
 - ✅ M5.2: TtsService abstract interface (clean abstraction layer)
 - ✅ M5.3: SpeechToTextService (speech_to_text wrapper with fallback)
 - ✅ M5.4: FlutterTtsService (flutter_tts wrapper with fallback)
 - ✅ M5.5: All services registered in AppLocator
-- 🔄 M5.6: Voice input button (infrastructure ready, UI integration pending)
-- 🔄 M5.7: Voice output toggle (infrastructure ready, UI integration pending)
+- ✅ M5.6: Voice input button (mic button in chat with live transcription)
+- ✅ M5.7: Voice output toggle (volume toggle in AppBar, TTS for responses)
 
 **Implementation Notes:**
 - Complete abstraction layer - easy to swap providers (Google Cloud, AWS, etc.)
 - Mock services for testing (MockSpeechService, MockTtsService)
 - Managers with fallback chains (SpeechManager, TtsManager)
 - All services available via Provider app-wide
-- Comprehensive documentation (SPEECH_SERVICES_IMPLEMENTATION.md, TTS_SERVICES_IMPLEMENTATION.md)
-- Ready for UI integration (M5.6-M5.7 are simple button additions)
+- Full voice integration in chat screen (hands-free conversation ready!)
+- Comprehensive documentation (SPEECH_SERVICES_IMPLEMENTATION.md, TTS_SERVICES_IMPLEMENTATION.md, VOICE_CHAT_INTEGRATION.md)
 
 **Additional Implementation:**
 - Created 10 new service files (5 STT + 5 TTS)
-- Full voice loop example: Listen → LLM → Speak
+- Full voice loop working: Tap mic → Speak → Auto-send → LLM → TTS speaks response
 - Multi-language support ready
 - Accessibility features ready (screen reader support)
+- Real-time partial transcription display
+- Permission handling for microphone access
 
 ---
 
