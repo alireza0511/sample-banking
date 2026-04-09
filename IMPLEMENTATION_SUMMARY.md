@@ -1,6 +1,6 @@
 # Kind Banking - Voice Features Implementation Summary
 
-This document provides an overview of the M4 (Voice Assistants) and M5 (Speech Services) implementations.
+This document provides an overview of the M4 (Voice Assistants), M5 (Speech Services), and M5 TTS (Text-to-Speech) implementations.
 
 ## ✅ M4 — Voice Assistants (Siri Integration) - COMPLETE
 
@@ -54,24 +54,60 @@ await speech.startListening(
 
 ---
 
+## ✅ M5 TTS — Text-to-Speech Services - COMPLETE
+
+**Goal:** Add in-app text-to-speech with swappable providers
+
+**Implementation:**
+- Created abstract `TtsService` interface
+- Wrapped `flutter_tts` package in `FlutterTtsService`
+- Built `TtsManager` with fallback chain (like LlmManager)
+- Added `MockTtsService` for testing without audio
+
+**Key Benefit:** Easy to swap TTS providers - just implement the interface!
+
+**Usage Example:**
+```dart
+final tts = Provider.of<TtsManager>(context);
+
+await tts.speak(
+  'Your balance is one thousand dollars',
+  onComplete: () => print('Done speaking'),
+);
+
+// Voice controls
+await tts.setSpeechRate(0.5);  // Speed
+await tts.setVolume(0.8);      // Volume
+await tts.setPitch(1.0);       // Pitch
+await tts.setLanguage('es-ES'); // Spanish
+```
+
+**Files:** 5 new, 1 modified
+**Documentation:** `TTS_SERVICES_IMPLEMENTATION.md`
+
+---
+
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  Voice Features                          │
-└───────────────────┬──────────────────┬──────────────────┘
-                    │                  │
-        ┌───────────▼─────────┐  ┌────▼──────────────┐
-        │  M4: Voice Assistants│  │ M5: Speech Services│
-        │  (Siri/Assistant)    │  │ (In-App STT)       │
-        └───────────┬──────────┘  └────┬──────────────┘
-                    │                  │
-        ┌───────────▼──────────────────▼──────────────┐
-        │      Existing Deep Link Infrastructure       │
-        │  • DeepLinkService                          │
-        │  • DeepLinkHandler (routing)                │
-        │  • AppRouter (auth gating)                  │
-        └─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Voice Features                             │
+└────────┬──────────────┬──────────────┬──────────────────────┘
+         │              │              │
+   ┌─────▼────────┐ ┌──▼───────┐ ┌────▼──────────┐
+   │ M4: Voice    │ │ M5: STT  │ │ M5: TTS       │
+   │ Assistants   │ │ (Listen) │ │ (Speak)       │
+   │ (Siri)       │ │          │ │               │
+   └─────┬────────┘ └──┬───────┘ └────┬──────────┘
+         │              │              │
+         └──────────────┴──────────────┘
+                       │
+         ┌─────────────▼─────────────────────────┐
+         │ Existing Deep Link Infrastructure     │
+         │  • DeepLinkService                   │
+         │  • DeepLinkHandler (routing)         │
+         │  • AppRouter (auth gating)           │
+         └───────────────────────────────────────┘
 ```
 
 **Key Insight:** Both features leverage existing infrastructure, minimizing new code!
@@ -173,7 +209,7 @@ android/app/src/main/res/
 VOICE_ASSISTANTS_IMPLEMENTATION.md
 ```
 
-### M5 Files (6 new)
+### M5 STT Files (6 new)
 ```
 lib/core/speech/
   ├── speech_service.dart           # Abstract interface
@@ -185,9 +221,21 @@ lib/core/speech/
 SPEECH_SERVICES_IMPLEMENTATION.md
 ```
 
-### Modified Files (6 total)
+### M5 TTS Files (6 new)
 ```
-lib/core/locator.dart              # Registered services
+lib/core/tts/
+  ├── tts_service.dart              # Abstract interface
+  ├── flutter_tts_service.dart      # flutter_tts wrapper
+  ├── mock_tts_service.dart         # Mock for testing
+  ├── tts_manager.dart              # Manager with fallback
+  └── tts.dart                      # Barrel export
+
+TTS_SERVICES_IMPLEMENTATION.md
+```
+
+### Modified Files (7 total)
+```
+lib/core/locator.dart              # Registered services (M4, M5 STT, M5 TTS)
 pubspec.yaml                        # Dependencies
 ios/Runner/Info.plist              # iOS permissions
 ios/Runner/Runner.entitlements     # iOS capabilities
@@ -203,14 +251,15 @@ IMPLEMENTATION_SUMMARY.md          # This file
 ```yaml
 dependencies:
   flutter_app_intents: ^0.7.0   # M4 - iOS App Intents
-  speech_to_text: ^7.3.0         # M5 - Speech recognition
+  speech_to_text: ^7.3.0         # M5 STT - Speech recognition
+  flutter_tts: ^4.2.5            # M5 TTS - Text-to-speech
 ```
 
 ---
 
 ## Quick Start Guide
 
-### Using Speech Services (M5)
+### Using Speech Services (M5 STT - Listen)
 ```dart
 // 1. Get the manager
 final speech = Provider.of<SpeechManager>(context);
@@ -231,6 +280,26 @@ await speech.startListening(
 
 // 4. Stop when done
 await speech.stopListening();
+```
+
+### Using TTS Services (M5 TTS - Speak)
+```dart
+// 1. Get the manager
+final tts = Provider.of<TtsManager>(context);
+
+// 2. Speak text
+await tts.speak(
+  'Your balance is one thousand dollars',
+  onComplete: () => print('Done'),
+);
+
+// 3. Control voice
+await tts.setSpeechRate(0.5);  // Speed
+await tts.setVolume(0.8);      // Volume
+await tts.setPitch(1.0);       // Pitch
+
+// 4. Stop if needed
+await tts.stop();
 ```
 
 ### Testing Voice Assistants (M4)

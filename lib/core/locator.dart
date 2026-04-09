@@ -7,6 +7,7 @@ import 'llm/llm_manager.dart';
 import 'network/api_client.dart';
 import 'routing/deep_link_service.dart';
 import 'speech/speech_manager.dart';
+import 'tts/tts_manager.dart';
 
 /// Dependency injection setup using Provider
 /// All services and repositories are registered here
@@ -18,6 +19,7 @@ class AppLocator {
   static LlmManager? _llmManager;
   static IntentService? _intentService;
   static SpeechManager? _speechManager;
+  static TtsManager? _ttsManager;
 
   /// Get the shared ApiClient instance
   static ApiClient get apiClient {
@@ -49,6 +51,12 @@ class AppLocator {
     return _speechManager!;
   }
 
+  /// Get the shared TtsManager instance
+  static TtsManager get ttsManager {
+    _ttsManager ??= TtsManager();
+    return _ttsManager!;
+  }
+
   /// Initialize all dependencies
   static Future<void> init() async {
     // Set environment (can be configured via build flags)
@@ -72,6 +80,10 @@ class AppLocator {
     // Initialize speech manager with fallback chain
     _speechManager = SpeechManager();
     await _speechManager!.initialize();
+
+    // Initialize TTS manager with fallback chain
+    _ttsManager = TtsManager();
+    await _ttsManager!.initialize();
   }
 
   /// Get all providers for the app
@@ -90,6 +102,9 @@ class AppLocator {
 
         // Speech Manager provider (singleton with fallback chain)
         Provider<SpeechManager>.value(value: speechManager),
+
+        // TTS Manager provider (singleton with fallback chain)
+        Provider<TtsManager>.value(value: ttsManager),
 
         // Auth state provider
         ChangeNotifierProxyProvider<ApiClient, AuthStateNotifier>(
