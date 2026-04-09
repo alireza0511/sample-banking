@@ -51,6 +51,10 @@
 	<true/>
 	<key>NSSiriUsageDescription</key>
 	<string>Kind Banking uses Siri to help you quickly check your balance, transfer money, pay bills, and manage your finances with voice commands.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Kind Banking needs access to your microphone for voice commands and speech-to-text features to help you manage your finances hands-free.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Kind Banking uses speech recognition to convert your voice commands into text, making it easier to navigate and use banking features.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>com.kindbanking.app.ShowBalance</string>

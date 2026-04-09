@@ -6,6 +6,7 @@ import 'intents/intent_service.dart';
 import 'llm/llm_manager.dart';
 import 'network/api_client.dart';
 import 'routing/deep_link_service.dart';
+import 'speech/speech_manager.dart';
 
 /// Dependency injection setup using Provider
 /// All services and repositories are registered here
@@ -16,6 +17,7 @@ class AppLocator {
   static DeepLinkService? _deepLinkService;
   static LlmManager? _llmManager;
   static IntentService? _intentService;
+  static SpeechManager? _speechManager;
 
   /// Get the shared ApiClient instance
   static ApiClient get apiClient {
@@ -41,6 +43,12 @@ class AppLocator {
     return _intentService!;
   }
 
+  /// Get the shared SpeechManager instance
+  static SpeechManager get speechManager {
+    _speechManager ??= SpeechManager();
+    return _speechManager!;
+  }
+
   /// Initialize all dependencies
   static Future<void> init() async {
     // Set environment (can be configured via build flags)
@@ -60,6 +68,10 @@ class AppLocator {
     // Initialize intent service for Siri/voice commands
     _intentService = IntentService(deepLinkService: deepLinkService);
     await _intentService!.init();
+
+    // Initialize speech manager with fallback chain
+    _speechManager = SpeechManager();
+    await _speechManager!.initialize();
   }
 
   /// Get all providers for the app
@@ -75,6 +87,9 @@ class AppLocator {
 
         // Intent Service provider (singleton for voice commands)
         Provider<IntentService>.value(value: intentService),
+
+        // Speech Manager provider (singleton with fallback chain)
+        Provider<SpeechManager>.value(value: speechManager),
 
         // Auth state provider
         ChangeNotifierProxyProvider<ApiClient, AuthStateNotifier>(
