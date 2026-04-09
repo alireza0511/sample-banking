@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kind Banking</string>
+
+    <!-- Shortcut Labels -->
+    <string name="shortcut_balance_short">Balance</string>
+    <string name="shortcut_balance_long">Show my balance</string>
+
+    <string name="shortcut_transfer_short">Transfer</string>
+    <string name="shortcut_transfer_long">Transfer money</string>
+
+    <string name="shortcut_bills_short">Pay Bills</string>
+    <string name="shortcut_bills_long">Pay my bills</string>
+
+    <string name="shortcut_cards_short">Cards</string>
+    <string name="shortcut_cards_long">Show my cards</string>
+
+    <string name="shortcut_chat_short">Chat</string>
+    <string name="shortcut_chat_long">Ask a question</string>
+
+    <string name="shortcut_disabled_message">Please log in to use this feature</string>
+</resources>

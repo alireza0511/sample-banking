@@ -7,5 +7,7 @@
 		<string>applinks:app.kindbanking.com</string>
 		<string>applinks:www.kindbanking.com</string>
 	</array>
+	<key>com.apple.developer.siri</key>
+	<true/>
 </dict>
 </plist>

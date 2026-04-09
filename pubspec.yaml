@@ -40,6 +40,9 @@ dependencies:
   equatable: ^2.0.7
   json_annotation: ^4.9.0
 
+  # Voice & Intents
+  flutter_app_intents: ^0.7.0
+
   flutter_local_ai: ^0.0.6
 
 dev_dependencies:

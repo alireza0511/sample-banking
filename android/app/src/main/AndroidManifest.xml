@@ -40,6 +40,10 @@
                 <data android:host="app.kindbanking.com"/>
                 <data android:host="www.kindbanking.com"/>
             </intent-filter>
+            <!-- App Shortcuts for Google Assistant -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

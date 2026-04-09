@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Show Balance Shortcut -->
+    <shortcut
+        android:shortcutId="show_balance"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_balance_short"
+        android:shortcutLongLabel="@string/shortcut_balance_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="kindbanking://balance" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <!-- Transfer Money Shortcut -->
+    <shortcut
+        android:shortcutId="transfer_money"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_transfer_short"
+        android:shortcutLongLabel="@string/shortcut_transfer_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="kindbanking://transfer" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <!-- Pay Bills Shortcut -->
+    <shortcut
+        android:shortcutId="pay_bills"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_bills_short"
+        android:shortcutLongLabel="@string/shortcut_bills_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="kindbanking://pay-bills" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <!-- Show Cards Shortcut -->
+    <shortcut
+        android:shortcutId="show_cards"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_cards_short"
+        android:shortcutLongLabel="@string/shortcut_cards_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="kindbanking://cards" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <!-- Open Chat Shortcut -->
+    <shortcut
+        android:shortcutId="open_chat"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_chat_short"
+        android:shortcutLongLabel="@string/shortcut_chat_long"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="kindbanking://chat" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

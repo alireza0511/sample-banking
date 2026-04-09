@@ -49,6 +49,16 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSSiriUsageDescription</key>
+	<string>Kind Banking uses Siri to help you quickly check your balance, transfer money, pay bills, and manage your finances with voice commands.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.kindbanking.app.ShowBalance</string>
+		<string>com.kindbanking.app.Transfer</string>
+		<string>com.kindbanking.app.PayBills</string>
+		<string>com.kindbanking.app.ShowCards</string>
+		<string>com.kindbanking.app.OpenChat</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import 'config/app_config.dart';
+import 'intents/intent_service.dart';
 import 'llm/llm_manager.dart';
 import 'network/api_client.dart';
 import 'routing/deep_link_service.dart';
@@ -14,6 +15,7 @@ class AppLocator {
   static ApiClient? _apiClient;
   static DeepLinkService? _deepLinkService;
   static LlmManager? _llmManager;
+  static IntentService? _intentService;
 
   /// Get the shared ApiClient instance
   static ApiClient get apiClient {
@@ -33,6 +35,12 @@ class AppLocator {
     return _llmManager!;
   }
 
+  /// Get the shared IntentService instance
+  static IntentService get intentService {
+    _intentService ??= IntentService(deepLinkService: deepLinkService);
+    return _intentService!;
+  }
+
   /// Initialize all dependencies
   static Future<void> init() async {
     // Set environment (can be configured via build flags)
@@ -48,6 +56,10 @@ class AppLocator {
     // Initialize LLM manager with fallback chain
     _llmManager = LlmManager();
     await _llmManager!.initialize();
+
+    // Initialize intent service for Siri/voice commands
+    _intentService = IntentService(deepLinkService: deepLinkService);
+    await _intentService!.init();
   }
 
   /// Get all providers for the app
@@ -60,6 +72,9 @@ class AppLocator {
 
         // LLM Manager provider (singleton with fallback chain)
         Provider<LlmManager>.value(value: llmManager),
+
+        // Intent Service provider (singleton for voice commands)
+        Provider<IntentService>.value(value: intentService),
 
         // Auth state provider
         ChangeNotifierProxyProvider<ApiClient, AuthStateNotifier>(
