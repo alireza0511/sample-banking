@@ -27,4 +27,5 @@ export 'llm_provider.dart';
 export 'llm_manager.dart';
 export 'on_device_llm_provider.dart';
 export 'mock_llm_provider.dart';
-export 'local_llm_platform.dart';
+export 'local_ai_client.dart';
+export 'flutter_local_ai_client.dart';
