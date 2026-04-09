@@ -2563,22 +2563,22 @@ The LLM integration uses a provider pattern with an abstract interface, allowing
 └─────────────────────────────────────────────────────────────┘
 ```
 
-| Task ID | Task | Description | Priority |
-|---|---|---|---|
-| M3.1 | flutter_local_ai setup | Add package, configure iOS/Android requirements | Must Have |
-| M3.2 | **LlmService interface** | Create abstract `LlmService` with `generateResponse()`, `streamResponse()`, `isAvailable()`, `getProviderInfo()` | Must Have |
-| M3.3 | **LlmProvider base** | Create `LlmProvider` abstract class with common functionality (context management, error handling) | Must Have |
-| M3.4 | **OnDeviceLlmProvider** | Implement provider wrapping flutter_local_ai; isolates package-specific code | Must Have |
-| M3.5 | **MockLlmProvider** | Test/demo provider with canned responses for development | Should Have |
-| M3.6 | Availability detection | Check and cache on-device LLM availability at startup | Must Have |
-| M3.7 | Provider registration | Register providers in locator with fallback chain | Must Have |
-| M3.8 | Simple chat UI | Basic chat screen with text input and message list | Must Have |
-| M3.9 | Chat bloc | UseCase for chat message handling | Must Have |
-| M3.10 | Message bubbles | User and assistant message bubble widgets | Must Have |
-| M3.11 | Typing indicator | Show indicator while LLM is generating | Must Have |
-| M3.12 | Error handling | Graceful error display if LLM unavailable | Must Have |
-| M3.13 | Privacy indicator | "On-device" badge showing data stays local | Must Have |
-| M3.14 | Conversation context | Maintain last 10 messages as context | Should Have |
+| Task ID | Task | Description | Priority | Status |
+|---|---|---|---|---|
+| M3.1 | flutter_local_ai setup | Add package, configure iOS/Android requirements | Must Have | ✅ |
+| M3.2 | **LlmService interface** | Create abstract `LlmService` with `generateResponse()`, `streamResponse()`, `isAvailable()`, `getProviderInfo()` | Must Have | ✅ |
+| M3.3 | **LlmProvider base** | Create `LlmProvider` abstract class with common functionality (context management, error handling) | Must Have | ✅ |
+| M3.4 | **OnDeviceLlmProvider** | Implement provider wrapping flutter_local_ai; isolates package-specific code | Must Have | ✅ |
+| M3.5 | **MockLlmProvider** | Test/demo provider with canned responses for development | Should Have | ✅ |
+| M3.6 | Availability detection | Check and cache on-device LLM availability at startup | Must Have | ✅ |
+| M3.7 | Provider registration | Register providers in locator with fallback chain | Must Have | ✅ |
+| M3.8 | Simple chat UI | Basic chat screen with text input and message list | Must Have | ✅ |
+| M3.9 | Chat bloc | UseCase for chat message handling | Must Have | ✅ |
+| M3.10 | Message bubbles | User and assistant message bubble widgets | Must Have | ✅ |
+| M3.11 | Typing indicator | Show indicator while LLM is generating | Must Have | ✅ |
+| M3.12 | Error handling | Graceful error display if LLM unavailable | Must Have | ✅ |
+| M3.13 | Privacy indicator | "On-device" badge showing data stays local | Must Have | ✅ |
+| M3.14 | Conversation context | Maintain last 10 messages as context | Should Have | ✅ |
 
 **LLM Service Interface (lib/core/llm/llm_service.dart):**
 
