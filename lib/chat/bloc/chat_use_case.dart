@@ -8,6 +8,7 @@ import '../../core/speech/speech_manager.dart';
 import '../../core/tts/tts_manager.dart';
 import '../model/chat_message.dart';
 import '../services/chat_storage_service.dart';
+import '../services/suggestion_service.dart';
 import 'chat_entity.dart';
 import 'chat_view_model.dart';
 
@@ -18,6 +19,7 @@ class ChatUseCase extends UseCase {
   final SpeechManager _speechManager;
   final TtsManager _ttsManager;
   final ChatStorageService? _storageService;
+  final SuggestionService _suggestionService = SuggestionService();
 
   ChatEntity _entity = ChatEntity();
   StreamSubscription<String>? _streamSubscription;
@@ -343,6 +345,10 @@ If asked to perform an action, guide the user to the appropriate screen.
   }
 
   void _notifyListeners() {
+    // Update suggestions based on current messages
+    final suggestions = _suggestionService.getSuggestions(_entity.messages);
+    _entity = _entity.merge(suggestions: suggestions);
+
     _viewModelCallback(ChatViewModel.fromEntity(_entity));
   }
 

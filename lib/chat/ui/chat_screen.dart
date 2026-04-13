@@ -6,10 +6,14 @@ import '../../core/speech/speech_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/tts/tts_manager.dart';
+import '../../core/utils/haptic_feedback_helper.dart';
 import '../../core/widgets/widgets.dart';
 import '../bloc/chat_bloc.dart';
 import '../model/chat_message.dart';
 import '../services/chat_storage_service.dart';
+import '../services/suggestion_service.dart';
+import '../widgets/rich_message_content.dart';
+import '../widgets/voice_mode_overlay.dart';
 
 /// Chat screen with AI assistant
 class ChatScreen extends StatefulWidget {
@@ -25,6 +29,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   late final ChatBloc _bloc;
   bool _blocInitialized = false;
+  bool _isVoiceModeActive = false;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
@@ -75,6 +80,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final message = _inputController.text.trim();
     if (message.isEmpty) return;
 
+    HapticFeedbackHelper.lightImpact();
     _bloc.sendMessagePipe.send(message);
     _inputController.clear();
     _scrollToBottom();
@@ -96,12 +102,14 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Provider<ChatBloc>.value(
       value: _bloc,
-      child: GestureDetector(
-        onTap: () {
-          // Dismiss keyboard when tapping outside
-          FocusScope.of(context).unfocus();
-        },
-        child: Scaffold(
+      child: Stack(
+        children: [
+          GestureDetector(
+            onTap: () {
+              // Dismiss keyboard when tapping outside
+              FocusScope.of(context).unfocus();
+            },
+            child: Scaffold(
           resizeToAvoidBottomInset: true,
           appBar: AppBar(
           title: const Text('Chat'),
@@ -130,7 +138,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   button: true,
                   enabled: true,
                   child: IconButton(
-                    onPressed: () => _bloc.toggleVoiceOutputPipe.launch(),
+                    onPressed: () {
+                      HapticFeedbackHelper.selection();
+                      _bloc.toggleVoiceOutputPipe.launch();
+                    },
                     icon: Icon(
                       voiceEnabled ? Icons.volume_up : Icons.volume_off,
                       color: voiceEnabled ? AppColors.primaryBlue : null,
@@ -139,6 +150,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 );
               },
+            ),
+            // Voice mode button
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _isVoiceModeActive = true;
+                });
+              },
+              icon: const Icon(Icons.graphic_eq),
+              tooltip: 'Voice mode',
             ),
             PopupMenuButton<String>(
               onSelected: (value) {
@@ -202,6 +223,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 },
               ),
             ),
+            // Suggestions
+            StreamBuilder<ChatViewModel>(
+              stream: _bloc.viewModelPipe.receive,
+              builder: (context, snapshot) {
+                final viewModel = snapshot.data;
+                final suggestions = viewModel?.suggestions ?? [];
+
+                if (suggestions.isEmpty || viewModel?.isTyping == true) {
+                  return const SizedBox.shrink();
+                }
+
+                return _SuggestionsRow(
+                  suggestions: suggestions,
+                  onSuggestionTap: (suggestion) {
+                    _inputController.text = suggestion.text;
+                    _inputFocusNode.requestFocus();
+                  },
+                );
+              },
+            ),
             StreamBuilder<ChatViewModel>(
               stream: _bloc.viewModelPipe.receive,
               builder: (context, snapshot) {
@@ -216,13 +257,45 @@ class _ChatScreenState extends State<ChatScreen> {
                   onSend: _sendMessage,
                   isListening: viewModel?.isListening ?? false,
                   voiceInputText: viewModel?.voiceInputText ?? '',
-                  onToggleVoiceInput: () => _bloc.toggleVoiceInputPipe.launch(),
+                  onToggleVoiceInput: () {
+                    HapticFeedbackHelper.selection();
+                    _bloc.toggleVoiceInputPipe.launch();
+                  },
                 );
               },
             ),
           ],
         ),
-        ),
+            ),
+          ),
+          // Voice mode overlay
+          if (_isVoiceModeActive)
+            StreamBuilder<ChatViewModel>(
+              stream: _bloc.viewModelPipe.receive,
+              builder: (context, snapshot) {
+                final viewModel = snapshot.data;
+                return VoiceModeOverlay(
+                  isListening: viewModel?.isListening ?? false,
+                  isSpeaking: false, // TODO: Track TTS speaking state
+                  transcriptionText: viewModel?.voiceInputText ?? '',
+                  onClose: () {
+                    setState(() {
+                      _isVoiceModeActive = false;
+                    });
+                    // Stop listening if active
+                    if (viewModel?.isListening == true) {
+                      HapticFeedbackHelper.selection();
+                      _bloc.toggleVoiceInputPipe.launch();
+                    }
+                  },
+                  onToggleListening: () {
+                    HapticFeedbackHelper.selection();
+                    _bloc.toggleVoiceInputPipe.launch();
+                  },
+                );
+              },
+            ),
+        ],
       ),
     );
   }
@@ -486,11 +559,9 @@ class _MessageBubble extends StatelessWidget {
                   ),
                   child: message.isPending
                       ? const _TypingIndicator()
-                      : Text(
-                          message.content,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: isUser ? Colors.white : null,
-                              ),
+                      : RichMessageContent(
+                          content: message.content,
+                          isUser: isUser,
                         ),
                 ),
                 if (message.isError && onRetry != null) ...[
@@ -768,6 +839,54 @@ class _ChatInput extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Suggestions row widget
+class _SuggestionsRow extends StatelessWidget {
+  final List<Suggestion> suggestions;
+  final void Function(Suggestion) onSuggestionTap;
+
+  const _SuggestionsRow({
+    required this.suggestions,
+    required this.onSuggestionTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.screenPadding,
+        vertical: AppSpacing.sm,
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: suggestions.map((suggestion) {
+            return Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: Semantics(
+                label: 'Suggestion: ${suggestion.displayText}. Tap to use.',
+                button: true,
+                child: ActionChip(
+                  label: Text(suggestion.displayText),
+                  onPressed: () => onSuggestionTap(suggestion),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  side: BorderSide(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

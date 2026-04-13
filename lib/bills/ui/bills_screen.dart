@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/routing/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/haptic_feedback_helper.dart';
 import '../../core/widgets/widgets.dart';
 import '../bloc/bills_bloc.dart';
 import '../model/bill.dart';
@@ -86,7 +87,10 @@ class _BillsScreenState extends State<BillsScreen> {
               return _PaymentForm(viewModel: viewModel, bloc: _bloc);
             }
 
-            return _BillerList(viewModel: viewModel, bloc: _bloc);
+            return RefreshIndicator(
+              onRefresh: () async => _bloc.resetPipe.launch(),
+              child: _BillerList(viewModel: viewModel, bloc: _bloc),
+            );
           },
         ),
       ),
@@ -380,7 +384,10 @@ class _PaymentFormState extends State<_PaymentForm> {
                 onPressed: widget.viewModel.isSubmitting ||
                         widget.viewModel.paymentAmount == null
                     ? null
-                    : () => widget.bloc.submitPipe.launch(),
+                    : () {
+                        HapticFeedbackHelper.mediumImpact();
+                        widget.bloc.submitPipe.launch();
+                      },
                 child: widget.viewModel.isSubmitting
                     ? const SizedBox(
                         width: 20,

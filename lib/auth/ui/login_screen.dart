@@ -4,6 +4,7 @@ import '../../core/config/app_config.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/routing/routes.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/haptic_feedback_helper.dart';
 
 /// Simple login screen for development/demo
 /// Biometric authentication will be added in Phase 3 (M12)
@@ -53,17 +54,22 @@ class _LoginScreenState extends State<LoginScreen> {
         // Set authenticated state
         AppRouter.setAuthenticated(true);
 
+        // Success haptic feedback
+        HapticFeedbackHelper.success();
+
         // Navigate to redirect destination or hub
         if (mounted) {
           final redirect = widget.redirectTo ?? Routes.hub;
           context.go(redirect);
         }
       } else {
+        HapticFeedbackHelper.error();
         setState(() {
           _errorMessage = 'Invalid credentials';
         });
       }
     } catch (e) {
+      HapticFeedbackHelper.error();
       setState(() {
         _errorMessage = 'Login failed. Please try again.';
       });

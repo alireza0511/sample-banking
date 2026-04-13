@@ -2,6 +2,7 @@ import 'package:clean_framework/clean_framework.dart';
 
 import '../../core/llm/llm_service.dart';
 import '../model/chat_message.dart';
+import '../services/suggestion_service.dart';
 import 'chat_entity.dart';
 
 /// View model for the chat screen
@@ -17,6 +18,7 @@ class ChatViewModel extends ViewModel {
   final bool isListening;
   final bool voiceOutputEnabled;
   final String voiceInputText;
+  final List<Suggestion> suggestions;
 
   ChatViewModel({
     required this.messages,
@@ -30,6 +32,7 @@ class ChatViewModel extends ViewModel {
     required this.isListening,
     required this.voiceOutputEnabled,
     required this.voiceInputText,
+    required this.suggestions,
   });
 
   factory ChatViewModel.fromEntity(ChatEntity entity) {
@@ -45,6 +48,7 @@ class ChatViewModel extends ViewModel {
       isListening: entity.isListening,
       voiceOutputEnabled: entity.voiceOutputEnabled,
       voiceInputText: entity.voiceInputText,
+      suggestions: entity.suggestions,
     );
   }
 
@@ -59,6 +63,7 @@ class ChatViewModel extends ViewModel {
       isListening: false,
       voiceOutputEnabled: false,
       voiceInputText: '',
+      suggestions: const [],
     );
   }
 
@@ -96,5 +101,6 @@ class ChatViewModel extends ViewModel {
         isListening,
         voiceOutputEnabled,
         voiceInputText,
+        suggestions,
       ];
 }

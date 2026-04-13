@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/haptic_feedback_helper.dart';
 import '../../core/widgets/widgets.dart';
 import '../bloc/cards_bloc.dart';
 import '../model/card.dart';
@@ -90,12 +91,24 @@ class _CardsList extends StatelessWidget {
                 : null,
             isTogglingFreeze: viewModel.isTogglingFreeze,
             isRevealingDetails: viewModel.isRevealingDetails,
-            onTap: () => bloc.selectCardPipe.send(
-              viewModel.selectedCard?.id == card.id ? null : card,
-            ),
-            onToggleFreeze: () => bloc.toggleFreezePipe.send(card),
-            onRevealDetails: () => bloc.revealDetailsPipe.send(card),
-            onHideDetails: () => bloc.hideDetailsPipe.launch(),
+            onTap: () {
+              HapticFeedbackHelper.lightImpact();
+              bloc.selectCardPipe.send(
+                viewModel.selectedCard?.id == card.id ? null : card,
+              );
+            },
+            onToggleFreeze: () {
+              HapticFeedbackHelper.mediumImpact();
+              bloc.toggleFreezePipe.send(card);
+            },
+            onRevealDetails: () {
+              HapticFeedbackHelper.mediumImpact();
+              bloc.revealDetailsPipe.send(card);
+            },
+            onHideDetails: () {
+              HapticFeedbackHelper.lightImpact();
+              bloc.hideDetailsPipe.launch();
+            },
           ),
         ),
       ],

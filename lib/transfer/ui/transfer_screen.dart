@@ -7,6 +7,7 @@ import '../../balance/model/account.dart';
 import '../../core/routing/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/haptic_feedback_helper.dart';
 import '../../core/widgets/widgets.dart';
 import '../bloc/transfer_bloc.dart';
 import '../model/payee.dart';
@@ -354,7 +355,7 @@ class _AccountSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<Account>(
-      value: selectedAccount,
+      initialValue: selectedAccount,
       decoration: const InputDecoration(
         border: OutlineInputBorder(),
       ),
@@ -442,7 +443,10 @@ class _ConfirmationStep extends StatelessWidget {
         // Bottom buttons
         _BottomButtons(
           onBack: () => bloc.previousStepPipe.launch(),
-          onNext: viewModel.isSubmitting ? null : () => bloc.submitPipe.launch(),
+          onNext: viewModel.isSubmitting ? null : () {
+            HapticFeedbackHelper.mediumImpact();
+            bloc.submitPipe.launch();
+          },
           nextLabel: viewModel.isSubmitting ? 'Sending...' : 'Send Money',
           isLoading: viewModel.isSubmitting,
         ),
