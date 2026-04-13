@@ -27,7 +27,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  late final ChatBloc _bloc;
+  ChatBloc? _bloc;
   bool _blocInitialized = false;
   bool _isVoiceModeActive = false;
   final TextEditingController _inputController = TextEditingController();
@@ -40,15 +40,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Create bloc with voice services from Provider
     if (!_blocInitialized) {
-      _initializeBloc();
       _blocInitialized = true;
-
-      // Handle initial prompt from deep link
-      if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _inputController.text = widget.initialPrompt!;
-        });
-      }
+      _initializeBloc();
     }
   }
 
@@ -60,16 +53,27 @@ class _ChatScreenState extends State<ChatScreen> {
     final prefs = await SharedPreferences.getInstance();
     final storageService = ChatStorageService(prefs);
 
-    _bloc = ChatBloc(
-      speechManager: speechManager,
-      ttsManager: ttsManager,
-      storageService: storageService,
-    );
+    if (mounted) {
+      setState(() {
+        _bloc = ChatBloc(
+          speechManager: speechManager,
+          ttsManager: ttsManager,
+          storageService: storageService,
+        );
+      });
+
+      // Handle initial prompt from deep link
+      if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _inputController.text = widget.initialPrompt!;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
-    _bloc.dispose();
+    _bloc?.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -80,8 +84,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final message = _inputController.text.trim();
     if (message.isEmpty) return;
 
+    final bloc = _bloc;
+    if (bloc == null) return;
+
     HapticFeedbackHelper.lightImpact();
-    _bloc.sendMessagePipe.send(message);
+    bloc.sendMessagePipe.send(message);
     _inputController.clear();
     _scrollToBottom();
   }
@@ -100,8 +107,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bloc = _bloc;
+    if (bloc == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Chat')),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Provider<ChatBloc>.value(
-      value: _bloc,
+      value: bloc,
       child: Stack(
         children: [
           GestureDetector(
@@ -115,7 +132,7 @@ class _ChatScreenState extends State<ChatScreen> {
           title: const Text('Chat'),
           actions: [
             StreamBuilder<ChatViewModel>(
-              stream: _bloc.viewModelPipe.receive,
+              stream: bloc.viewModelPipe.receive,
               builder: (context, snapshot) {
                 final viewModel = snapshot.data;
                 return _PrivacyIndicator(
@@ -126,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             // Voice output toggle
             StreamBuilder<ChatViewModel>(
-              stream: _bloc.viewModelPipe.receive,
+              stream: bloc.viewModelPipe.receive,
               builder: (context, snapshot) {
                 final viewModel = snapshot.data;
                 final voiceEnabled = viewModel?.voiceOutputEnabled ?? false;
@@ -140,7 +157,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: IconButton(
                     onPressed: () {
                       HapticFeedbackHelper.selection();
-                      _bloc.toggleVoiceOutputPipe.launch();
+                      bloc.toggleVoiceOutputPipe.launch();
                     },
                     icon: Icon(
                       voiceEnabled ? Icons.volume_up : Icons.volume_off,
@@ -164,9 +181,9 @@ class _ChatScreenState extends State<ChatScreen> {
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'clear') {
-                  _bloc.clearChatPipe.launch();
+                  bloc.clearChatPipe.launch();
                 } else if (value == 'refresh') {
-                  _bloc.refreshPipe.launch();
+                  bloc.refreshPipe.launch();
                 }
               },
               itemBuilder: (context) => [
@@ -186,7 +203,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Expanded(
               child: StreamBuilder<ChatViewModel>(
-                stream: _bloc.viewModelPipe.receive,
+                stream: bloc.viewModelPipe.receive,
                 builder: (context, snapshot) {
                   final viewModel = snapshot.data;
 
@@ -206,7 +223,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (!viewModel.isLlmAvailable) {
                     return ErrorView(
                       message: viewModel.errorMessage ?? 'AI assistant is not available',
-                      onRetry: () => _bloc.refreshPipe.launch(),
+                      onRetry: () => bloc.refreshPipe.launch(),
                     );
                   }
 
@@ -218,14 +235,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     messages: viewModel.messages,
                     isTyping: viewModel.isTyping,
                     scrollController: _scrollController,
-                    onRetry: () => _bloc.retryPipe.launch(),
+                    onRetry: () => bloc.retryPipe.launch(),
                   );
                 },
               ),
             ),
             // Suggestions
             StreamBuilder<ChatViewModel>(
-              stream: _bloc.viewModelPipe.receive,
+              stream: bloc.viewModelPipe.receive,
               builder: (context, snapshot) {
                 final viewModel = snapshot.data;
                 final suggestions = viewModel?.suggestions ?? [];
@@ -244,7 +261,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
             StreamBuilder<ChatViewModel>(
-              stream: _bloc.viewModelPipe.receive,
+              stream: bloc.viewModelPipe.receive,
               builder: (context, snapshot) {
                 final viewModel = snapshot.data;
                 final canSend = viewModel?.canSendMessage ?? false;
@@ -259,7 +276,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   voiceInputText: viewModel?.voiceInputText ?? '',
                   onToggleVoiceInput: () {
                     HapticFeedbackHelper.selection();
-                    _bloc.toggleVoiceInputPipe.launch();
+                    bloc.toggleVoiceInputPipe.launch();
                   },
                 );
               },
@@ -271,7 +288,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Voice mode overlay
           if (_isVoiceModeActive)
             StreamBuilder<ChatViewModel>(
-              stream: _bloc.viewModelPipe.receive,
+              stream: bloc.viewModelPipe.receive,
               builder: (context, snapshot) {
                 final viewModel = snapshot.data;
                 return VoiceModeOverlay(
@@ -285,12 +302,12 @@ class _ChatScreenState extends State<ChatScreen> {
                     // Stop listening if active
                     if (viewModel?.isListening == true) {
                       HapticFeedbackHelper.selection();
-                      _bloc.toggleVoiceInputPipe.launch();
+                      bloc.toggleVoiceInputPipe.launch();
                     }
                   },
                   onToggleListening: () {
                     HapticFeedbackHelper.selection();
-                    _bloc.toggleVoiceInputPipe.launch();
+                    bloc.toggleVoiceInputPipe.launch();
                   },
                 );
               },
