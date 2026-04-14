@@ -1,14 +1,12 @@
 import 'package:clean_framework/clean_framework.dart';
 
-import '../../core/speech/speech_manager.dart';
-import '../../core/tts/tts_manager.dart';
-import '../services/chat_storage_service.dart';
 import 'chat_use_case.dart';
 import 'chat_view_model.dart';
 
 export 'chat_view_model.dart';
 
 /// Bloc for managing chat screen
+/// Following clean_framework pattern with no direct manager injections
 class ChatBloc extends Bloc {
   late final ChatUseCase _useCase;
 
@@ -32,27 +30,14 @@ class ChatBloc extends Bloc {
     _useCase.dispose();
   }
 
-  ChatBloc({
-    SpeechManager? speechManager,
-    TtsManager? ttsManager,
-    ChatStorageService? storageService,
-  }) {
-    _useCase = ChatUseCase(
-      viewModelPipe.send,
-      speechManager: speechManager,
-      ttsManager: ttsManager,
-      storageService: storageService,
-    );
+  ChatBloc() {
+    _useCase = ChatUseCase(viewModelPipe.send);
 
     // Initialize when first listened to
-    viewModelPipe.whenListenedDo(_useCase.initialize);
+    viewModelPipe.whenListenedDo(_useCase.create);
 
     // Handle send message
-    sendMessagePipe.receive.listen((message) {
-      if (message.isNotEmpty) {
-        _useCase.sendMessage(message);
-      }
-    });
+    sendMessagePipe.receive.listen(_sendMessageHandler);
 
     // Handle clear chat
     clearChatPipe.listen(_useCase.clearChat);
@@ -68,5 +53,11 @@ class ChatBloc extends Bloc {
 
     // Handle voice output toggle
     toggleVoiceOutputPipe.listen(_useCase.toggleVoiceOutput);
+  }
+
+  void _sendMessageHandler(String message) {
+    if (message.isNotEmpty) {
+      _useCase.sendMessage(message);
+    }
   }
 }

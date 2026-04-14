@@ -1,79 +1,112 @@
+import 'package:clean_framework/clean_framework.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/speech/speech_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/tts/tts_manager.dart';
-import '../../core/utils/haptic_feedback_helper.dart';
 import '../../core/widgets/widgets.dart';
-import '../bloc/chat_bloc.dart';
+import '../bloc/chat_view_model.dart';
 import '../model/chat_message.dart';
-import '../services/chat_storage_service.dart';
 import '../services/suggestion_service.dart';
 import '../widgets/rich_message_content.dart';
 import '../widgets/voice_mode_overlay.dart';
 
-/// Chat screen with AI assistant
-class ChatScreen extends StatefulWidget {
-  /// Optional initial prompt (from deep link)
+/// Chat screen - pure UI widget following clean_framework pattern
+/// All state management is handled by the Presenter
+class ChatScreen extends Screen {
+  final ChatViewModel viewModel;
   final String? initialPrompt;
+  final void Function(String) onSendMessage;
+  final VoidCallback onClearChat;
+  final VoidCallback onRetry;
+  final VoidCallback onRefresh;
+  final VoidCallback onToggleVoiceInput;
+  final VoidCallback onToggleVoiceOutput;
 
-  const ChatScreen({super.key, this.initialPrompt});
+  const ChatScreen({
+    super.key,
+    required this.viewModel,
+    this.initialPrompt,
+    required this.onSendMessage,
+    required this.onClearChat,
+    required this.onRetry,
+    required this.onRefresh,
+    required this.onToggleVoiceInput,
+    required this.onToggleVoiceOutput,
+  });
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  Widget build(BuildContext context) {
+    return _ChatScreenContent(
+      viewModel: viewModel,
+      initialPrompt: initialPrompt,
+      onSendMessage: onSendMessage,
+      onClearChat: onClearChat,
+      onRetry: onRetry,
+      onRefresh: onRefresh,
+      onToggleVoiceInput: onToggleVoiceInput,
+      onToggleVoiceOutput: onToggleVoiceOutput,
+    );
+  }
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  ChatBloc? _bloc;
-  bool _blocInitialized = false;
+/// Stateful content for managing controllers and local UI state
+class _ChatScreenContent extends StatefulWidget {
+  final ChatViewModel viewModel;
+  final String? initialPrompt;
+  final void Function(String) onSendMessage;
+  final VoidCallback onClearChat;
+  final VoidCallback onRetry;
+  final VoidCallback onRefresh;
+  final VoidCallback onToggleVoiceInput;
+  final VoidCallback onToggleVoiceOutput;
+
+  const _ChatScreenContent({
+    required this.viewModel,
+    this.initialPrompt,
+    required this.onSendMessage,
+    required this.onClearChat,
+    required this.onRetry,
+    required this.onRefresh,
+    required this.onToggleVoiceInput,
+    required this.onToggleVoiceOutput,
+  });
+
+  @override
+  State<_ChatScreenContent> createState() => _ChatScreenContentState();
+}
+
+class _ChatScreenContentState extends State<_ChatScreenContent> {
   bool _isVoiceModeActive = false;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
+  bool _initialPromptSet = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // Create bloc with voice services from Provider
-    if (!_blocInitialized) {
-      _blocInitialized = true;
-      _initializeBloc();
+  void initState() {
+    super.initState();
+    // Set initial prompt if provided
+    if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_initialPromptSet) {
+          _inputController.text = widget.initialPrompt!;
+          _initialPromptSet = true;
+        }
+      });
     }
   }
 
-  Future<void> _initializeBloc() async {
-    final speechManager = Provider.of<SpeechManager>(context, listen: false);
-    final ttsManager = Provider.of<TtsManager>(context, listen: false);
-
-    // Initialize SharedPreferences for chat storage
-    final prefs = await SharedPreferences.getInstance();
-    final storageService = ChatStorageService(prefs);
-
-    if (mounted) {
-      setState(() {
-        _bloc = ChatBloc(
-          speechManager: speechManager,
-          ttsManager: ttsManager,
-          storageService: storageService,
-        );
-      });
-
-      // Handle initial prompt from deep link
-      if (widget.initialPrompt != null && widget.initialPrompt!.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _inputController.text = widget.initialPrompt!;
-        });
-      }
+  @override
+  void didUpdateWidget(covariant _ChatScreenContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Scroll to bottom when new messages arrive
+    if (widget.viewModel.messages.length > oldWidget.viewModel.messages.length) {
+      _scrollToBottom();
     }
   }
 
   @override
   void dispose() {
-    _bloc?.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     _inputFocusNode.dispose();
@@ -84,11 +117,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final message = _inputController.text.trim();
     if (message.isEmpty) return;
 
-    final bloc = _bloc;
-    if (bloc == null) return;
-
-    HapticFeedbackHelper.lightImpact();
-    bloc.sendMessagePipe.send(message);
+    widget.onSendMessage(message);
     _inputController.clear();
     _scrollToBottom();
   }
@@ -107,213 +136,152 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bloc = _bloc;
-    if (bloc == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Chat')),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
+    final viewModel = widget.viewModel;
 
-    return Provider<ChatBloc>.value(
-      value: bloc,
-      child: Stack(
-        children: [
-          GestureDetector(
-            onTap: () {
-              // Dismiss keyboard when tapping outside
-              FocusScope.of(context).unfocus();
-            },
-            child: Scaffold(
-          resizeToAvoidBottomInset: true,
-          appBar: AppBar(
-          title: const Text('Chat'),
-          actions: [
-            StreamBuilder<ChatViewModel>(
-              stream: bloc.viewModelPipe.receive,
-              builder: (context, snapshot) {
-                final viewModel = snapshot.data;
-                return _PrivacyIndicator(
-                  isOnDevice: viewModel?.isOnDevice ?? false,
-                  providerName: viewModel?.privacyText ?? 'AI',
-                );
-              },
-            ),
-            // Voice output toggle
-            StreamBuilder<ChatViewModel>(
-              stream: bloc.viewModelPipe.receive,
-              builder: (context, snapshot) {
-                final viewModel = snapshot.data;
-                final voiceEnabled = viewModel?.voiceOutputEnabled ?? false;
-
-                return Semantics(
-                  label: voiceEnabled
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () {
+            // Dismiss keyboard when tapping outside
+            FocusScope.of(context).unfocus();
+          },
+          child: Scaffold(
+            resizeToAvoidBottomInset: true,
+            appBar: AppBar(
+              title: const Text('Chat'),
+              actions: [
+                _PrivacyIndicator(
+                  isOnDevice: viewModel.isOnDevice,
+                  providerName: viewModel.privacyText,
+                ),
+                // Voice output toggle
+                Semantics(
+                  label: viewModel.voiceOutputEnabled
                       ? 'Voice output enabled. Tap to disable.'
                       : 'Voice output disabled. Tap to enable.',
                   button: true,
                   enabled: true,
                   child: IconButton(
-                    onPressed: () {
-                      HapticFeedbackHelper.selection();
-                      bloc.toggleVoiceOutputPipe.launch();
-                    },
+                    onPressed: widget.onToggleVoiceOutput,
                     icon: Icon(
-                      voiceEnabled ? Icons.volume_up : Icons.volume_off,
-                      color: voiceEnabled ? AppColors.primaryBlue : null,
+                      viewModel.voiceOutputEnabled ? Icons.volume_up : Icons.volume_off,
+                      color: viewModel.voiceOutputEnabled ? AppColors.primaryBlue : null,
                     ),
-                    tooltip: voiceEnabled ? 'Disable voice output' : 'Enable voice output',
+                    tooltip: viewModel.voiceOutputEnabled
+                        ? 'Disable voice output'
+                        : 'Enable voice output',
                   ),
-                );
-              },
-            ),
-            // Voice mode button
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  _isVoiceModeActive = true;
-                });
-              },
-              icon: const Icon(Icons.graphic_eq),
-              tooltip: 'Voice mode',
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'clear') {
-                  bloc.clearChatPipe.launch();
-                } else if (value == 'refresh') {
-                  bloc.refreshPipe.launch();
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'clear',
-                  child: Text('Clear chat'),
                 ),
-                const PopupMenuItem(
-                  value: 'refresh',
-                  child: Text('Refresh AI status'),
+                // Voice mode button
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _isVoiceModeActive = true;
+                    });
+                  },
+                  icon: const Icon(Icons.graphic_eq),
+                  tooltip: 'Voice mode',
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'clear') {
+                      widget.onClearChat();
+                    } else if (value == 'refresh') {
+                      widget.onRefresh();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'clear',
+                      child: Text('Clear chat'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'refresh',
+                      child: Text('Refresh AI status'),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-        body: Column(
-          children: [
-            Expanded(
-              child: StreamBuilder<ChatViewModel>(
-                stream: bloc.viewModelPipe.receive,
-                builder: (context, snapshot) {
-                  final viewModel = snapshot.data;
-
-                  if (viewModel == null || viewModel.isLoading) {
-                    return const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: AppSpacing.md),
-                          Text('Initializing AI...'),
-                        ],
-                      ),
-                    );
-                  }
-
-                  if (!viewModel.isLlmAvailable) {
-                    return ErrorView(
-                      message: viewModel.errorMessage ?? 'AI assistant is not available',
-                      onRetry: () => bloc.refreshPipe.launch(),
-                    );
-                  }
-
-                  if (viewModel.isEmpty) {
-                    return const _WelcomeView();
-                  }
-
-                  return _ChatMessageList(
-                    messages: viewModel.messages,
-                    isTyping: viewModel.isTyping,
-                    scrollController: _scrollController,
-                    onRetry: () => bloc.retryPipe.launch(),
-                  );
-                },
-              ),
-            ),
-            // Suggestions
-            StreamBuilder<ChatViewModel>(
-              stream: bloc.viewModelPipe.receive,
-              builder: (context, snapshot) {
-                final viewModel = snapshot.data;
-                final suggestions = viewModel?.suggestions ?? [];
-
-                if (suggestions.isEmpty || viewModel?.isTyping == true) {
-                  return const SizedBox.shrink();
-                }
-
-                return _SuggestionsRow(
-                  suggestions: suggestions,
-                  onSuggestionTap: (suggestion) {
-                    _inputController.text = suggestion.text;
-                    _inputFocusNode.requestFocus();
-                  },
-                );
-              },
-            ),
-            StreamBuilder<ChatViewModel>(
-              stream: bloc.viewModelPipe.receive,
-              builder: (context, snapshot) {
-                final viewModel = snapshot.data;
-                final canSend = viewModel?.canSendMessage ?? false;
-
-                return _ChatInput(
+            body: Column(
+              children: [
+                Expanded(
+                  child: _buildBody(context, viewModel),
+                ),
+                // Suggestions
+                if (viewModel.suggestions.isNotEmpty && !viewModel.isTyping)
+                  _SuggestionsRow(
+                    suggestions: viewModel.suggestions,
+                    onSuggestionTap: (suggestion) {
+                      _inputController.text = suggestion.text;
+                      _inputFocusNode.requestFocus();
+                    },
+                  ),
+                _ChatInput(
                   controller: _inputController,
                   focusNode: _inputFocusNode,
-                  enabled: canSend,
-                  isTyping: viewModel?.isTyping ?? false,
+                  enabled: viewModel.canSendMessage,
+                  isTyping: viewModel.isTyping,
                   onSend: _sendMessage,
-                  isListening: viewModel?.isListening ?? false,
-                  voiceInputText: viewModel?.voiceInputText ?? '',
-                  onToggleVoiceInput: () {
-                    HapticFeedbackHelper.selection();
-                    bloc.toggleVoiceInputPipe.launch();
-                  },
-                );
-              },
-            ),
-          ],
-        ),
+                  isListening: viewModel.isListening,
+                  voiceInputText: viewModel.voiceInputText,
+                  onToggleVoiceInput: widget.onToggleVoiceInput,
+                ),
+              ],
             ),
           ),
-          // Voice mode overlay
-          if (_isVoiceModeActive)
-            StreamBuilder<ChatViewModel>(
-              stream: bloc.viewModelPipe.receive,
-              builder: (context, snapshot) {
-                final viewModel = snapshot.data;
-                return VoiceModeOverlay(
-                  isListening: viewModel?.isListening ?? false,
-                  isSpeaking: false, // TODO: Track TTS speaking state
-                  transcriptionText: viewModel?.voiceInputText ?? '',
-                  onClose: () {
-                    setState(() {
-                      _isVoiceModeActive = false;
-                    });
-                    // Stop listening if active
-                    if (viewModel?.isListening == true) {
-                      HapticFeedbackHelper.selection();
-                      bloc.toggleVoiceInputPipe.launch();
-                    }
-                  },
-                  onToggleListening: () {
-                    HapticFeedbackHelper.selection();
-                    bloc.toggleVoiceInputPipe.launch();
-                  },
-                );
-              },
-            ),
-        ],
-      ),
+        ),
+        // Voice mode overlay
+        if (_isVoiceModeActive)
+          VoiceModeOverlay(
+            isListening: viewModel.isListening,
+            isSpeaking: false,
+            transcriptionText: viewModel.voiceInputText,
+            onClose: () {
+              setState(() {
+                _isVoiceModeActive = false;
+              });
+              // Stop listening if active
+              if (viewModel.isListening) {
+                widget.onToggleVoiceInput();
+              }
+            },
+            onToggleListening: widget.onToggleVoiceInput,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBody(BuildContext context, ChatViewModel viewModel) {
+    if (viewModel.isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: AppSpacing.md),
+            Text('Initializing AI...'),
+          ],
+        ),
+      );
+    }
+
+    if (!viewModel.isLlmAvailable) {
+      return ErrorView(
+        message: viewModel.errorMessage ?? 'AI assistant is not available',
+        onRetry: widget.onRefresh,
+      );
+    }
+
+    if (viewModel.isEmpty) {
+      return const _WelcomeView();
+    }
+
+    return _ChatMessageList(
+      messages: viewModel.messages,
+      isTyping: viewModel.isTyping,
+      scrollController: _scrollController,
+      onRetry: widget.onRetry,
     );
   }
 }
@@ -545,63 +513,63 @@ class _MessageBubble extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            _Avatar(isUser: false),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: isUser
-                        ? AppColors.primaryBlue
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(AppSpacing.radiusMd),
-                      topRight: const Radius.circular(AppSpacing.radiusMd),
-                      bottomLeft:
-                          Radius.circular(isUser ? AppSpacing.radiusMd : AppSpacing.radiusSm),
-                      bottomRight:
-                          Radius.circular(isUser ? AppSpacing.radiusSm : AppSpacing.radiusMd),
+          mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isUser) ...[
+              _Avatar(isUser: false),
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: isUser
+                          ? AppColors.primaryBlue
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(AppSpacing.radiusMd),
+                        topRight: const Radius.circular(AppSpacing.radiusMd),
+                        bottomLeft:
+                            Radius.circular(isUser ? AppSpacing.radiusMd : AppSpacing.radiusSm),
+                        bottomRight:
+                            Radius.circular(isUser ? AppSpacing.radiusSm : AppSpacing.radiusMd),
+                      ),
                     ),
-                  ),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
-                  ),
-                  child: message.isPending
-                      ? const _TypingIndicator()
-                      : RichMessageContent(
-                          content: message.content,
-                          isUser: isUser,
-                        ),
-                ),
-                if (message.isError && onRetry != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  TextButton.icon(
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh, size: 16),
-                    label: const Text('Retry'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
                     ),
+                    child: message.isPending
+                        ? const _TypingIndicator()
+                        : RichMessageContent(
+                            content: message.content,
+                            isUser: isUser,
+                          ),
                   ),
+                  if (message.isError && onRetry != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    TextButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Retry'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          if (isUser) ...[
-            const SizedBox(width: AppSpacing.sm),
-            _Avatar(isUser: true),
+            if (isUser) ...[
+              const SizedBox(width: AppSpacing.sm),
+              _Avatar(isUser: true),
+            ],
           ],
-        ],
         ),
       ),
     );

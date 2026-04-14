@@ -1,27 +1,28 @@
 import 'dart:async';
 
 import 'package:clean_framework/clean_framework.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/llm/llm_manager.dart';
 import '../../core/llm/llm_service.dart';
+import '../../core/locator.dart';
 import '../../core/speech/speech_manager.dart';
 import '../../core/tts/tts_manager.dart';
 import '../model/chat_message.dart';
 import '../services/chat_storage_service.dart';
 import '../services/suggestion_service.dart';
 import 'chat_entity.dart';
+import 'chat_service_adapter.dart';
 import 'chat_view_model.dart';
 
 /// Use case for managing chat functionality
+/// Following clean_framework pattern with service locator
 class ChatUseCase extends UseCase {
   final ViewModelCallback<ChatViewModel> _viewModelCallback;
-  final LlmManager _llmManager;
-  final SpeechManager _speechManager;
-  final TtsManager _ttsManager;
-  final ChatStorageService? _storageService;
+  final ChatServiceAdapter _serviceAdapter;
   final SuggestionService _suggestionService = SuggestionService();
 
   ChatEntity _entity = ChatEntity();
+  ChatStorageService? _storageService;
   StreamSubscription<String>? _streamSubscription;
 
   /// System prompt for banking assistant
@@ -38,41 +39,40 @@ Never share sensitive information in your responses.
 If asked to perform an action, guide the user to the appropriate screen.
 ''';
 
-  /// Maximum messages to keep in context
-  static const int _maxContextMessages = 10;
-
   ChatUseCase(
     this._viewModelCallback, {
-    LlmManager? llmManager,
-    SpeechManager? speechManager,
-    TtsManager? ttsManager,
-    ChatStorageService? storageService,
-  })  : _llmManager = llmManager ?? LlmManager(),
-        _speechManager = speechManager ?? SpeechManager(),
-        _ttsManager = ttsManager ?? TtsManager(),
-        _storageService = storageService;
+    ChatServiceAdapter? serviceAdapter,
+  }) : _serviceAdapter = serviceAdapter ?? ChatServiceAdapter();
 
-  /// Initialize the chat and check LLM availability
-  Future<void> initialize() async {
+  /// Access managers via AppLocator
+  SpeechManager get _speechManager => AppLocator.speechManager;
+  TtsManager get _ttsManager => AppLocator.ttsManager;
+
+  /// Initialize the chat (create method following clean_framework pattern)
+  Future<void> create() async {
     _entity = _entity.merge(isLoading: true, errorMessage: null);
     _notifyListeners();
 
     try {
-      // Initialize LLM
-      await _llmManager.initialize();
+      // Initialize service adapter
+      await _serviceAdapter.initialize();
 
-      final isAvailable = await _llmManager.isAvailable();
+      final isAvailable = await _serviceAdapter.isAvailable();
+
+      // Initialize storage service
+      final prefs = await SharedPreferences.getInstance();
+      _storageService = ChatStorageService(prefs);
 
       // Load chat history from storage
       List<ChatMessage> messages = [];
       if (_storageService != null) {
-        messages = await _storageService.loadMessages();
+        messages = await _storageService!.loadMessages();
       }
 
       _entity = _entity.merge(
         isLoading: false,
         isLlmAvailable: isAvailable,
-        providerInfo: _llmManager.providerInfo,
+        providerInfo: _serviceAdapter.providerInfo,
         messages: messages,
       );
       _notifyListeners();
@@ -108,47 +108,15 @@ If asked to perform an action, guide the user to the appropriate screen.
     _notifyListeners();
 
     try {
-      // Build context from recent messages
-      final contextMessages = _buildContext(updatedMessages);
-
-      final request = LlmRequest(
+      // Use service adapter for streaming response
+      _entity = await _serviceAdapter.streamResponse(
+        entity: _entity,
         prompt: content.trim(),
-        context: contextMessages,
         systemPrompt: _systemPrompt,
-      );
-
-      // Use streaming for better UX
-      final responseBuffer = StringBuffer();
-
-      await for (final token in _llmManager.streamResponse(request)) {
-        responseBuffer.write(token);
-
-        // Update the pending message with streamed content
-        final currentMessages = List<ChatMessage>.from(_entity.messages);
-        if (currentMessages.isNotEmpty && currentMessages.last.isPending) {
-          currentMessages[currentMessages.length - 1] = currentMessages.last.copyWith(
-            content: responseBuffer.toString(),
-          );
-          _entity = _entity.merge(messages: currentMessages);
+        onUpdate: (updatedEntity) {
+          _entity = updatedEntity;
           _notifyListeners();
-        }
-      }
-
-      // Finalize the assistant message
-      final assistantMessage = ChatMessage.assistant(
-        content: responseBuffer.toString(),
-        id: pendingMessage.id,
-        isPrivate: _llmManager.isOnDevice,
-      );
-
-      final finalMessages = List<ChatMessage>.from(_entity.messages);
-      if (finalMessages.isNotEmpty) {
-        finalMessages[finalMessages.length - 1] = assistantMessage;
-      }
-
-      _entity = _entity.merge(
-        messages: finalMessages,
-        isTyping: false,
+        },
       );
       _notifyListeners();
 
@@ -156,13 +124,16 @@ If asked to perform an action, guide the user to the appropriate screen.
       await _saveMessages();
 
       // Speak the response if voice output is enabled
-      if (_entity.voiceOutputEnabled && assistantMessage.content.isNotEmpty) {
-        await _ttsManager.speak(
-          assistantMessage.content,
-          onError: (error) {
-            // Silent fail for TTS errors - don't interrupt user experience
-          },
-        );
+      if (_entity.voiceOutputEnabled) {
+        final lastMessage = _entity.messages.lastOrNull;
+        if (lastMessage != null && lastMessage.isAssistant && lastMessage.content.isNotEmpty) {
+          await _ttsManager.speak(
+            lastMessage.content,
+            onError: (error) {
+              // Silent fail for TTS errors - don't interrupt user experience
+            },
+          );
+        }
       }
     } on LlmError catch (e) {
       _handleError(e.message, pendingMessage.id);
@@ -192,22 +163,6 @@ If asked to perform an action, guide the user to the appropriate screen.
     _notifyListeners();
   }
 
-  /// Build LLM context from chat messages
-  List<LlmMessage> _buildContext(List<ChatMessage> messages) {
-    // Take last N messages for context
-    final recentMessages = messages.length > _maxContextMessages
-        ? messages.sublist(messages.length - _maxContextMessages)
-        : messages;
-
-    return recentMessages.map((m) {
-      return LlmMessage(
-        role: m.role == ChatRole.user ? LlmRole.user : LlmRole.assistant,
-        content: m.content,
-        timestamp: m.timestamp,
-      );
-    }).toList();
-  }
-
   /// Update current input text
   void updateInput(String input) {
     _entity = _entity.merge(currentInput: input);
@@ -224,7 +179,7 @@ If asked to perform an action, guide the user to the appropriate screen.
 
     // Clear storage
     if (_storageService != null) {
-      await _storageService.clearMessages();
+      await _storageService!.clearMessages();
     }
   }
 
@@ -249,11 +204,11 @@ If asked to perform an action, guide the user to the appropriate screen.
 
   /// Refresh LLM availability
   Future<void> refreshLlmStatus() async {
-    await _llmManager.refresh();
+    await _serviceAdapter.refresh();
 
     _entity = _entity.merge(
-      isLlmAvailable: await _llmManager.isAvailable(),
-      providerInfo: _llmManager.providerInfo,
+      isLlmAvailable: await _serviceAdapter.isAvailable(),
+      providerInfo: _serviceAdapter.providerInfo,
     );
     _notifyListeners();
   }
@@ -261,10 +216,8 @@ If asked to perform an action, guide the user to the appropriate screen.
   /// Toggle voice input (start/stop listening)
   Future<void> toggleVoiceInput() async {
     if (_entity.isListening) {
-      // Stop listening
       await _stopVoiceInput();
     } else {
-      // Start listening
       await _startVoiceInput();
     }
   }
@@ -355,13 +308,12 @@ If asked to perform an action, guide the user to the appropriate screen.
   /// Save current messages to storage
   Future<void> _saveMessages() async {
     if (_storageService != null) {
-      await _storageService.saveMessages(_entity.messages);
+      await _storageService!.saveMessages(_entity.messages);
     }
   }
 
   /// Dispose resources
   void dispose() {
     _streamSubscription?.cancel();
-    _llmManager.dispose();
   }
 }
