@@ -69,21 +69,12 @@ class AppLocator {
     _deepLinkService = DeepLinkService();
     await _deepLinkService!.init();
 
-    // Initialize LLM manager with fallback chain
-    _llmManager = LlmManager();
-    await _llmManager!.initialize();
-
     // Initialize intent service for Siri/voice commands
     _intentService = IntentService(deepLinkService: deepLinkService);
     await _intentService!.init();
 
-    // Initialize speech manager with fallback chain
-    _speechManager = SpeechManager();
-    await _speechManager!.initialize();
-
-    // Initialize TTS manager with fallback chain
-    _ttsManager = TtsManager();
-    await _ttsManager!.initialize();
+    // Note: LlmManager, SpeechManager, and TtsManager are initialized
+    // lazily in ChatFeatureWidget when the chat feature is accessed
   }
 
   /// Get all providers for the app
