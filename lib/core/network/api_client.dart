@@ -1,9 +1,16 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:clean_framework/clean_framework.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
+
+void _log(String message) {
+  developer.log(message, name: 'ApiClient');
+  // ignore: avoid_print
+  print('[ApiClient] $message');
+}
 
 /// Custom REST API client for Kind Banking
 /// Extends clean_framework's RestApi with JSON support and auth headers
@@ -46,6 +53,8 @@ class ApiClient extends RestApi<RestResponse<String>> {
     Map<String, dynamic> requestBody = const {},
   }) async {
     final uri = _buildUri(path);
+    _log('>>> ${method.name.toUpperCase()} $uri');
+    _log('>>> Base URL: $baseUrl');
 
     try {
       http.Response response;
@@ -81,22 +90,28 @@ class ApiClient extends RestApi<RestResponse<String>> {
           break;
       }
 
+      _log('<<< Response ${response.statusCode}');
+      _log('<<< Body: ${response.body.length > 200 ? '${response.body.substring(0, 200)}...' : response.body}');
+
       return RestResponse<String>(
         type: getResponseTypeFromCode(response.statusCode),
         uri: uri,
         content: response.body,
       );
     } on http.ClientException catch (e) {
+      _log('!!! ClientException: ${e.message}');
       return RestResponse<String>(
         type: RestResponseType.unknown,
         uri: uri,
         content: '{"error": "${e.message}"}',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _log('!!! Exception: $e');
+      _log('!!! Stack: $stackTrace');
       return RestResponse<String>(
         type: RestResponseType.unknown,
         uri: uri,
-        content: '{"error": "Unknown error occurred"}',
+        content: '{"error": "Unknown error occurred: $e"}',
       );
     }
   }

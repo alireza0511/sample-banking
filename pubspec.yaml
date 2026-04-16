@@ -46,6 +46,8 @@ dependencies:
   flutter_local_ai: ^0.0.6
   speech_to_text: ^7.3.0
   flutter_tts: ^4.2.5
+  genui_a2ui: ^0.7.0
+  genui: ^0.7.0
 
 dev_dependencies:
   flutter_test:
