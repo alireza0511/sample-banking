@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'routes.dart';
 import 'deep_link_handler.dart';
+import '../../ai_dashboard/ui/ai_dashboard_screen.dart';
 import '../../auth/ui/login_screen.dart';
 import '../../balance/ui/balance_screen.dart';
 import '../../bills/ui/bills_screen.dart';
@@ -207,6 +208,13 @@ class AppRouter {
           final prompt = state.uri.queryParameters[RouteParams.prompt];
           return ChatFeatureWidget(initialPrompt: prompt);
         },
+      ),
+
+      // AI Dashboard screen
+      GoRoute(
+        path: Routes.aiDashboard,
+        name: 'aiDashboard',
+        builder: (context, state) => const AiDashboardScreen(),
       ),
 
       // Settings screen

@@ -65,6 +65,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  banking_genui_components:
+    dependency: "direct main"
+    description:
+      path: "package/banking_genui_components"
+      relative: true
+    source: path
+    version: "0.0.1"
   boolean_selector:
     dependency: transitive
     description:

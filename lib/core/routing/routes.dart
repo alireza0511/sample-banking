@@ -20,6 +20,9 @@ class Routes {
   static const String settings = '/settings';
   static const String settingsPrivacy = '/settings/privacy';
 
+  // AI Dashboard
+  static const String aiDashboard = '/ai-dashboard';
+
   // Dev routes (only available in debug mode)
   static const String devDeepLinkTest = '/dev/deep-links';
   static const String devLlmStatus = '/dev/llm-status';

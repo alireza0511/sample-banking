@@ -49,6 +49,10 @@ dependencies:
   genui_a2ui: ^0.7.0
   genui: ^0.7.0
 
+  # Local packages
+  banking_genui_components:
+    path: "./package/banking_genui_components"
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

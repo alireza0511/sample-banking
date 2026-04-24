@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:genui/genui.dart';
 import 'package:json_schema_builder/json_schema_builder.dart';
 
@@ -10,6 +9,15 @@ import '../widgets/transaction_item.dart';
 ///
 /// This catalog provides banking UI components that AI agents can use
 /// to generate dynamic interfaces for banking applications.
+///
+/// Includes:
+/// - **AccountSummary**: Display account with balance and type
+/// - **QuickTransfer**: Transfer form with source/destination
+/// - **TransactionItem**: Single transaction display
+/// - **TransactionList**: List of transactions with header
+///
+/// Also includes all core A2UI components (Row, Column, Card, Text, Button, etc.)
+/// from [CoreCatalogItems].
 class BankingCatalog {
   BankingCatalog._();
 

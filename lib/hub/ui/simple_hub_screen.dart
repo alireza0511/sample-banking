@@ -16,6 +16,7 @@ class SimpleHubScreen extends StatefulWidget {
 class _SimpleHubScreenState extends State<SimpleHubScreen> {
   // Default selected actions - showing key banking features
   List<String> selectedActions = [
+    'AI Dashboard',
     'Accounts',
     'Transfer',
     'Pay Bills',
@@ -25,6 +26,7 @@ class _SimpleHubScreenState extends State<SimpleHubScreen> {
 
   // All available actions
   final List<String> allActions = [
+    'AI Dashboard',
     'Accounts',
     'Transfer',
     'Pay Bills',
@@ -64,7 +66,9 @@ class _SimpleHubScreenState extends State<SimpleHubScreen> {
   void _handleActionTap(String action) {
     final lowerAction = action.toLowerCase();
 
-    if (lowerAction.contains('account') || lowerAction.contains('balance')) {
+    if (lowerAction.contains('ai dashboard')) {
+      context.push(Routes.aiDashboard);
+    } else if (lowerAction.contains('account') || lowerAction.contains('balance')) {
       context.push(Routes.balance);
     } else if (lowerAction.contains('transaction')) {
       context.push(Routes.transactions);
@@ -314,7 +318,9 @@ class _ActionTile extends StatelessWidget {
 
   IconData _getIconForAction(String action) {
     final lowerAction = action.toLowerCase();
-    if (lowerAction.contains('account') || lowerAction.contains('balance')) {
+    if (lowerAction.contains('ai dashboard')) {
+      return Icons.auto_awesome;
+    } else if (lowerAction.contains('account') || lowerAction.contains('balance')) {
       return Icons.account_balance_wallet;
     } else if (lowerAction.contains('transaction')) {
       return Icons.receipt_long;
