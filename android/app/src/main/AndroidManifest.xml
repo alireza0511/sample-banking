@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Required by MainActivity.onCreate() to call Window.setHideOverlayWindows()
+         on Android 12+ for tapjacking hardening (CWE-1021). -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
 
     <application
         android:label="sample_banking"

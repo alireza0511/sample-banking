@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'routes.dart';
 import 'deep_link_handler.dart';
+import '../security/sensitive_route_observer.dart';
 import '../../ai_dashboard/ui/ai_dashboard_screen.dart';
 import '../../auth/ui/login_screen.dart';
 import '../../balance/ui/balance_screen.dart';
@@ -54,6 +55,10 @@ class AppRouter {
     initialLocation: Routes.hub,
     debugLogDiagnostics: true,
     refreshListenable: _isAuthenticated,
+
+    // Engage fraud-protection overlay guard automatically whenever a
+    // sensitive route (login, transfer, cards, …) is on top of the stack.
+    observers: [SensitiveRouteObserver()],
 
     // Redirect logic for auth
     redirect: (context, state) {
