@@ -1,0 +1,28 @@
+# Flavor-specific build configuration.
+# Values are placeholders — replace with real values per environment.
+# Consumed by build_android.sh / build_ios.sh via `yq`.
+
+flavors:
+  qa:
+    bundle_id_suffix: ".qa"
+    app_name: "Banking QA"
+    backend_url: "https://api-qa.bank.internal"
+    crashlytics_app_id_android: "1:000000000000:android:qa0000000000000000"
+    crashlytics_app_id_ios: "1:000000000000:ios:qa0000000000000000"
+    firebase_app_id_ios: "1:000000000000:ios:qa0000000000000000"
+
+  int:
+    bundle_id_suffix: ".int"
+    app_name: "Banking Integration"
+    backend_url: "https://api-int.bank.internal"
+    crashlytics_app_id_android: "1:000000000000:android:int000000000000000"
+    crashlytics_app_id_ios: "1:000000000000:ios:int000000000000000"
+    firebase_app_id_ios: "1:000000000000:ios:int000000000000000"
+
+  prod:
+    bundle_id_suffix: ""
+    app_name: "Banking"
+    backend_url: "https://api.bank.internal"
+    crashlytics_app_id_android: "1:000000000000:android:prod00000000000000"
+    crashlytics_app_id_ios: "1:000000000000:ios:prod00000000000000"
+    firebase_app_id_ios: "1:000000000000:ios:prod00000000000000"

@@ -1,0 +1,214 @@
+// .ci/Jenkinsfile.futuretest
+//
+// On-demand future-branch testing pipeline. Builds a feature branch against
+// a (potentially non-main) dependency branch using the forward-looking
+// toolchain pool. Always builds the 'int' flavor.
+//
+// Triggered manually via "Build with Parameters" in Jenkins.
+
+@Library('shared') _
+
+pipeline {
+    agent none
+
+    parameters {
+        string(name: 'FEATURE_BRANCH',          defaultValue: '',                   description: 'App branch to build')
+        string(name: 'DEPENDENCY_BRANCH',       defaultValue: 'main',               description: 'Branch slug for banking_* dependency snapshots')
+        string(name: 'BUILD_NUMBER_OVERRIDE',   defaultValue: '',                   description: 'Override build number; blank = use Jenkins BUILD_NUMBER')
+        choice(name: 'BUILD_TYPE',              choices: ['release', 'debug'],      description: 'Build type')
+        string(name: 'AGENT_LABEL',             defaultValue: 'flutter-future-pool', description: 'Agent pool to run on')
+    }
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+        timeout(time: 90, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        FLAVOR = 'int'
+        EFFECTIVE_BUILD_NUMBER = "${params.BUILD_NUMBER_OVERRIDE ?: env.BUILD_NUMBER}"
+        ARTIFACT_SUFFIX = "future-${params.FEATURE_BRANCH?.replaceAll('/', '-')}-${EFFECTIVE_BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Pipeline Info') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                echo "Feature branch:    ${params.FEATURE_BRANCH}"
+                echo "Dependency branch: ${params.DEPENDENCY_BRANCH}"
+                echo "Build type:        ${params.BUILD_TYPE}"
+                echo "Build number:      ${EFFECTIVE_BUILD_NUMBER}"
+                echo "Agent pool:        ${params.AGENT_LABEL}"
+                echo "Flavor:            ${env.FLAVOR}"
+            }
+        }
+
+        stage('Validate Inputs') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                script {
+                    if (!params.FEATURE_BRANCH?.trim()) {
+                        error('FEATURE_BRANCH is required.')
+                    }
+                }
+                withCredentials([
+                    string(credentialsId: 'artifactory-url',   variable: 'ARTIFACTORY_URL'),
+                    string(credentialsId: 'artifactory-repo',  variable: 'ARTIFACTORY_REPO'),
+                    usernamePassword(
+                        credentialsId: 'artifactory-creds',
+                        usernameVariable: 'ARTIFACTORY_USER',
+                        passwordVariable: 'ARTIFACTORY_TOKEN'
+                    )
+                ]) {
+                    sh ".ci/scripts/verify_artifactory_branch.sh '${params.DEPENDENCY_BRANCH}'"
+                }
+            }
+        }
+
+        stage('Checkout') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${params.FEATURE_BRANCH}"]],
+                    userRemoteConfigs: scm.userRemoteConfigs
+                ])
+                script {
+                    env.GIT_SHA = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
+                }
+            }
+        }
+
+        stage('Setup Toolchain') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps { sh '.ci/scripts/setup_env.sh' }
+        }
+
+        stage('Resolve Dependencies') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'artifactory-url',  variable: 'ARTIFACTORY_URL'),
+                    string(credentialsId: 'artifactory-repo', variable: 'ARTIFACTORY_REPO'),
+                    usernamePassword(
+                        credentialsId: 'artifactory-creds',
+                        usernameVariable: 'ARTIFACTORY_USER',
+                        passwordVariable: 'ARTIFACTORY_TOKEN'
+                    )
+                ]) {
+                    sh ".ci/scripts/setup_dependencies.sh '${params.DEPENDENCY_BRANCH}'"
+                }
+                sh 'flutter pub get'
+            }
+        }
+
+        stage('Static Analysis') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps {
+                sh 'dart format --output=none --set-exit-if-changed .'
+                sh 'flutter analyze'
+            }
+        }
+
+        stage('Unit Tests') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 20, unit: 'MINUTES') }
+            steps {
+                sh 'mkdir -p build/test-results'
+                sh 'flutter test --machine > build/test-results/dart-test.json || true'
+                sh '.ci/scripts/junit_from_dart_test.sh build/test-results/dart-test.json build/test-results/dart-test.xml'
+                junit allowEmptyResults: false, testResults: 'build/test-results/dart-test.xml'
+            }
+        }
+
+        stage('Build') {
+            parallel {
+                stage('Android') {
+                    agent { label params.AGENT_LABEL }
+                    options { timeout(time: 30, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'android',
+                            flavor: env.FLAVOR,
+                            buildType: params.BUILD_TYPE,
+                            buildNumber: env.EFFECTIVE_BUILD_NUMBER,
+                            gitSha: env.GIT_SHA,
+                            artifactSuffix: env.ARTIFACT_SUFFIX
+                        )
+                    }
+                }
+                stage('iOS') {
+                    agent { label params.AGENT_LABEL }
+                    options { timeout(time: 40, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'ios',
+                            flavor: env.FLAVOR,
+                            buildType: params.BUILD_TYPE,
+                            buildNumber: env.EFFECTIVE_BUILD_NUMBER,
+                            gitSha: env.GIT_SHA,
+                            artifactSuffix: env.ARTIFACT_SUFFIX
+                        )
+                    }
+                }
+            }
+        }
+
+        stage('Generate Manifest') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 5, unit: 'MINUTES') }
+            steps {
+                sh """
+                    .ci/scripts/generate_build_manifest.sh \
+                      --feature-branch='${params.FEATURE_BRANCH}' \
+                      --dependency-branch='${params.DEPENDENCY_BRANCH}' \
+                      --git-sha='${env.GIT_SHA}' \
+                      --build-number='${env.EFFECTIVE_BUILD_NUMBER}' \
+                      --flavor='${env.FLAVOR}' \
+                      --build-type='${params.BUILD_TYPE}'
+                """
+            }
+        }
+
+        stage('Archive Artifacts') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                archiveArtifacts artifacts: 'build/dist/**/*, pubspec_overrides.yaml, pubspec.lock', fingerprint: true
+            }
+        }
+
+        stage('Distribute') {
+            agent { label params.AGENT_LABEL }
+            when { expression { params.BUILD_TYPE == 'release' } }
+            steps {
+                script {
+                    buildFlutterFlavor.distributeInternal(
+                        flavor: env.FLAVOR,
+                        buildType: params.BUILD_TYPE,
+                        testerGroup: 'future-test'
+                    )
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            node(params.AGENT_LABEL) {
+                script {
+                    buildFlutterFlavor.notifyTeams(
+                        status: currentBuild.currentResult,
+                        buildNumber: env.EFFECTIVE_BUILD_NUMBER
+                    )
+                }
+                sh '.ci/scripts/ios_keychain_teardown.sh || true'
+                cleanWs()
+            }
+        }
+    }
+}

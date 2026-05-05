@@ -1,0 +1,31 @@
+// .ci/Jenkinsfile.pr
+//
+// PLACEHOLDER — slated to replace the existing root-level Jenkinsfile during
+// migration cutover. Do not wire this into Jenkins yet.
+//
+// TODO migration checklist:
+//   [ ] Port the existing PR validation stages from /Jenkinsfile
+//   [ ] Replace inline shell with .ci/scripts/* equivalents:
+//         - setup_env.sh         (toolchain check)
+//         - setup_dependencies.sh main
+//         - flutter analyze, dart format check
+//         - dart test --machine | junit_from_dart_test.sh
+//   [ ] Use buildFlutterFlavor() for any debug build steps
+//   [ ] Confirm agent label matches flutter-stable-pool
+//   [ ] Confirm credential IDs referenced in vars/buildFlutterFlavor.groovy
+//   [ ] Decide on artifact archival policy (debug builds — keep N? discard?)
+//   [ ] Hook generate_build_manifest.sh into post-build for traceability
+//
+// Cutover plan: keep /Jenkinsfile as the active PR pipeline until this file
+// has been validated end-to-end on a throwaway branch.
+
+pipeline {
+    agent { label 'flutter-stable-pool' }
+    stages {
+        stage('TODO: migrate from /Jenkinsfile') {
+            steps {
+                error('Jenkinsfile.pr is a placeholder. Use the root /Jenkinsfile until migration completes.')
+            }
+        }
+    }
+}

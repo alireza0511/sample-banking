@@ -1,0 +1,260 @@
+// .ci/Jenkinsfile.release
+//
+// Monthly release pipeline. Triggered on push to release/* branches.
+// Builds all three flavors (qa, int, prod) in parallel as release artifacts
+// using the stable toolchain pool. Includes full security scan stage.
+
+@Library('shared') _
+
+pipeline {
+    agent none
+
+    triggers {
+        // Multibranch pipeline filters branches; this is a safety net for
+        // single-branch project setups.
+        // TODO: confirm whether this is needed depending on Jenkins job type.
+        pollSCM('H/15 * * * *')
+    }
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '60'))
+        timeout(time: 120, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        DEPENDENCY_BRANCH = "${env.BRANCH_NAME ?: 'main'}"
+        BUILD_TYPE = 'release'
+        AGENT_POOL = 'flutter-stable-pool'
+    }
+
+    stages {
+        stage('Pipeline Info') {
+            agent { label env.AGENT_POOL }
+            steps {
+                echo "Release branch:    ${env.BRANCH_NAME}"
+                echo "Dependency branch: ${env.DEPENDENCY_BRANCH}"
+                echo "Build number:      ${env.BUILD_NUMBER}"
+                echo "Agent pool:        ${env.AGENT_POOL}"
+            }
+        }
+
+        stage('Validate') {
+            agent { label env.AGENT_POOL }
+            steps {
+                script {
+                    if (!(env.BRANCH_NAME?.startsWith('release/'))) {
+                        error("Jenkinsfile.release must run on release/* branches; got '${env.BRANCH_NAME}'.")
+                    }
+                }
+            }
+        }
+
+        stage('Checkout') {
+            agent { label env.AGENT_POOL }
+            steps {
+                checkout scm
+                script { env.GIT_SHA = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim() }
+            }
+        }
+
+        stage('Setup Toolchain') {
+            agent { label env.AGENT_POOL }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps { sh '.ci/scripts/setup_env.sh' }
+        }
+
+        stage('Resolve Dependencies') {
+            agent { label env.AGENT_POOL }
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'artifactory-url',  variable: 'ARTIFACTORY_URL'),
+                    string(credentialsId: 'artifactory-repo', variable: 'ARTIFACTORY_REPO'),
+                    usernamePassword(
+                        credentialsId: 'artifactory-creds',
+                        usernameVariable: 'ARTIFACTORY_USER',
+                        passwordVariable: 'ARTIFACTORY_TOKEN'
+                    )
+                ]) {
+                    sh ".ci/scripts/setup_dependencies.sh '${env.DEPENDENCY_BRANCH}'"
+                }
+                sh 'flutter pub get'
+            }
+        }
+
+        stage('Static Analysis') {
+            agent { label env.AGENT_POOL }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps {
+                sh 'dart format --output=none --set-exit-if-changed .'
+                sh 'flutter analyze'
+            }
+        }
+
+        stage('Unit Tests') {
+            agent { label env.AGENT_POOL }
+            options { timeout(time: 25, unit: 'MINUTES') }
+            steps {
+                sh 'mkdir -p build/test-results'
+                sh 'flutter test --machine > build/test-results/dart-test.json || true'
+                sh '.ci/scripts/junit_from_dart_test.sh build/test-results/dart-test.json build/test-results/dart-test.xml'
+                junit allowEmptyResults: false, testResults: 'build/test-results/dart-test.xml'
+            }
+        }
+
+        stage('Security Scan') {
+            agent { label env.AGENT_POOL }
+            options { timeout(time: 20, unit: 'MINUTES') }
+            steps {
+                // TODO: wire up real scanners (MobSF, dependency vuln scan, secrets scan).
+                // Placeholder for now so the pipeline shape is set.
+                echo '[security-scan placeholder] would run dependency vuln + SAST + secrets scan'
+            }
+        }
+
+        stage('Build All Flavors') {
+            parallel {
+                stage('qa-android') {
+                    agent { label env.AGENT_POOL }
+                    options { timeout(time: 30, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'android', flavor: 'qa', buildType: env.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER, gitSha: env.GIT_SHA,
+                            artifactSuffix: "release-qa-${env.BUILD_NUMBER}"
+                        )
+                    }
+                }
+                stage('qa-ios') {
+                    agent { label env.AGENT_POOL }
+                    options { timeout(time: 40, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'ios', flavor: 'qa', buildType: env.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER, gitSha: env.GIT_SHA,
+                            artifactSuffix: "release-qa-${env.BUILD_NUMBER}"
+                        )
+                    }
+                }
+                stage('int-android') {
+                    agent { label env.AGENT_POOL }
+                    options { timeout(time: 30, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'android', flavor: 'int', buildType: env.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER, gitSha: env.GIT_SHA,
+                            artifactSuffix: "release-int-${env.BUILD_NUMBER}"
+                        )
+                    }
+                }
+                stage('int-ios') {
+                    agent { label env.AGENT_POOL }
+                    options { timeout(time: 40, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'ios', flavor: 'int', buildType: env.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER, gitSha: env.GIT_SHA,
+                            artifactSuffix: "release-int-${env.BUILD_NUMBER}"
+                        )
+                    }
+                }
+                stage('prod-android') {
+                    agent { label env.AGENT_POOL }
+                    options { timeout(time: 30, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'android', flavor: 'prod', buildType: env.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER, gitSha: env.GIT_SHA,
+                            artifactSuffix: "release-prod-${env.BUILD_NUMBER}"
+                        )
+                    }
+                }
+                stage('prod-ios') {
+                    agent { label env.AGENT_POOL }
+                    options { timeout(time: 40, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'ios', flavor: 'prod', buildType: env.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER, gitSha: env.GIT_SHA,
+                            artifactSuffix: "release-prod-${env.BUILD_NUMBER}"
+                        )
+                    }
+                }
+            }
+        }
+
+        stage('Generate Manifest') {
+            agent { label env.AGENT_POOL }
+            steps {
+                sh """
+                    .ci/scripts/generate_build_manifest.sh \
+                      --feature-branch='${env.BRANCH_NAME}' \
+                      --dependency-branch='${env.DEPENDENCY_BRANCH}' \
+                      --git-sha='${env.GIT_SHA}' \
+                      --build-number='${env.BUILD_NUMBER}' \
+                      --flavor='all' \
+                      --build-type='${env.BUILD_TYPE}'
+                """
+            }
+        }
+
+        stage('Archive') {
+            agent { label env.AGENT_POOL }
+            steps {
+                archiveArtifacts artifacts: 'build/dist/**/*, pubspec_overrides.yaml, pubspec.lock', fingerprint: true
+            }
+        }
+
+        stage('Distribute') {
+            parallel {
+                stage('qa -> qa-integration') {
+                    agent { label env.AGENT_POOL }
+                    steps {
+                        script {
+                            buildFlutterFlavor.distributeInternal(
+                                flavor: 'qa', buildType: env.BUILD_TYPE, testerGroup: 'qa-integration'
+                            )
+                        }
+                    }
+                }
+                stage('int -> qa-integration') {
+                    agent { label env.AGENT_POOL }
+                    steps {
+                        script {
+                            buildFlutterFlavor.distributeInternal(
+                                flavor: 'int', buildType: env.BUILD_TYPE, testerGroup: 'qa-integration'
+                            )
+                        }
+                    }
+                }
+                stage('prod -> prod-staging') {
+                    agent { label env.AGENT_POOL }
+                    steps {
+                        script {
+                            buildFlutterFlavor.distributeInternal(
+                                flavor: 'prod', buildType: env.BUILD_TYPE, testerGroup: 'prod-staging'
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            node(env.AGENT_POOL) {
+                script {
+                    buildFlutterFlavor.notifyTeams(
+                        status: currentBuild.currentResult,
+                        buildNumber: env.BUILD_NUMBER
+                    )
+                }
+                sh '.ci/scripts/ios_keychain_teardown.sh || true'
+                cleanWs()
+            }
+        }
+    }
+}

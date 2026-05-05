@@ -1,0 +1,166 @@
+// .ci/Jenkinsfile.branchtest
+//
+// On-demand feature-branch testing pipeline. Lighter-weight than futuretest:
+// always uses the stable pool, dependencies pinned to main, qa flavor only,
+// distributes to dev-self group. No security/audit stages.
+
+@Library('shared') _
+
+pipeline {
+    agent none
+
+    parameters {
+        string(name: 'SOURCE_BRANCH', defaultValue: '',                     description: 'App branch to build')
+        choice(name: 'BUILD_TYPE',    choices: ['debug', 'release'],        description: 'Build type')
+        string(name: 'AGENT_LABEL',   defaultValue: 'flutter-stable-pool',  description: 'Agent pool to run on')
+    }
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    environment {
+        FLAVOR = 'qa'
+        DEPENDENCY_BRANCH = 'main'
+        ARTIFACT_SUFFIX = "branch-${params.SOURCE_BRANCH?.replaceAll('/', '-')}-${env.BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Validate') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                script {
+                    if (!params.SOURCE_BRANCH?.trim()) { error('SOURCE_BRANCH is required.') }
+                }
+            }
+        }
+
+        stage('Checkout') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${params.SOURCE_BRANCH}"]],
+                    userRemoteConfigs: scm.userRemoteConfigs
+                ])
+                script { env.GIT_SHA = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim() }
+            }
+        }
+
+        stage('Setup Toolchain') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps { sh '.ci/scripts/setup_env.sh' }
+        }
+
+        stage('Resolve Dependencies') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'artifactory-url',  variable: 'ARTIFACTORY_URL'),
+                    string(credentialsId: 'artifactory-repo', variable: 'ARTIFACTORY_REPO'),
+                    usernamePassword(
+                        credentialsId: 'artifactory-creds',
+                        usernameVariable: 'ARTIFACTORY_USER',
+                        passwordVariable: 'ARTIFACTORY_TOKEN'
+                    )
+                ]) {
+                    sh ".ci/scripts/setup_dependencies.sh '${env.DEPENDENCY_BRANCH}'"
+                }
+                sh 'flutter pub get'
+            }
+        }
+
+        stage('Unit Tests') {
+            agent { label params.AGENT_LABEL }
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                sh 'mkdir -p build/test-results'
+                sh 'flutter test --machine > build/test-results/dart-test.json || true'
+                sh '.ci/scripts/junit_from_dart_test.sh build/test-results/dart-test.json build/test-results/dart-test.xml'
+                junit allowEmptyResults: false, testResults: 'build/test-results/dart-test.xml'
+            }
+        }
+
+        stage('Build') {
+            parallel {
+                stage('Android') {
+                    agent { label params.AGENT_LABEL }
+                    options { timeout(time: 25, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'android',
+                            flavor: env.FLAVOR,
+                            buildType: params.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER,
+                            gitSha: env.GIT_SHA,
+                            artifactSuffix: env.ARTIFACT_SUFFIX
+                        )
+                    }
+                }
+                stage('iOS') {
+                    agent { label params.AGENT_LABEL }
+                    options { timeout(time: 35, unit: 'MINUTES') }
+                    steps {
+                        buildFlutterFlavor(
+                            platform: 'ios',
+                            flavor: env.FLAVOR,
+                            buildType: params.BUILD_TYPE,
+                            buildNumber: env.BUILD_NUMBER,
+                            gitSha: env.GIT_SHA,
+                            artifactSuffix: env.ARTIFACT_SUFFIX
+                        )
+                    }
+                }
+            }
+        }
+
+        stage('Generate Manifest') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                sh """
+                    .ci/scripts/generate_build_manifest.sh \
+                      --feature-branch='${params.SOURCE_BRANCH}' \
+                      --dependency-branch='${env.DEPENDENCY_BRANCH}' \
+                      --git-sha='${env.GIT_SHA}' \
+                      --build-number='${env.BUILD_NUMBER}' \
+                      --flavor='${env.FLAVOR}' \
+                      --build-type='${params.BUILD_TYPE}'
+                """
+            }
+        }
+
+        stage('Archive') {
+            agent { label params.AGENT_LABEL }
+            steps {
+                archiveArtifacts artifacts: 'build/dist/**/*, pubspec_overrides.yaml, pubspec.lock', fingerprint: true
+            }
+        }
+
+        stage('Distribute') {
+            agent { label params.AGENT_LABEL }
+            when { expression { params.BUILD_TYPE == 'release' } }
+            steps {
+                script {
+                    buildFlutterFlavor.distributeInternal(
+                        flavor: env.FLAVOR,
+                        buildType: params.BUILD_TYPE,
+                        testerGroup: 'dev-self'
+                    )
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            node(params.AGENT_LABEL) {
+                sh '.ci/scripts/ios_keychain_teardown.sh || true'
+                cleanWs()
+            }
+        }
+    }
+}

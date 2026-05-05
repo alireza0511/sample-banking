@@ -1,0 +1,17 @@
+# Jenkins agent pool definitions.
+# Pipelines target a pool by label. Keep this in sync with Jenkins agent configs.
+
+pools:
+  flutter-stable-pool:
+    purpose: "Production toolchain. Used for release/* branches and PR validation."
+    flutter: "3.27.0"
+    xcode: "16.0"
+    jdk: "17"
+    os: "macOS 14 / Ubuntu 22.04"
+
+  flutter-future-pool:
+    purpose: "Forward-looking toolchain for future-test builds. May run newer OS / Flutter / Xcode to flush out incompatibilities before they hit stable."
+    flutter: "next"
+    xcode: "next"
+    jdk: "17"
+    os: "macOS 15 / Ubuntu 24.04"

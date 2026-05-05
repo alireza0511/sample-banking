@@ -1,0 +1,9 @@
+# Required toolchain versions for the Flutter banking app.
+# setup_env.sh reads this to verify the build agent has the right tools.
+# Bumping any of these is a coordinated change — notify release engineering.
+
+flutter_version: "3.27.0"
+dart_version: "3.6.0"
+required_xcode: "16.0"
+required_jdk: "17"
+ruby_version: "3.2.2"

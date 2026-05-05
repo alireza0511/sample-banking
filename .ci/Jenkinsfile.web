@@ -1,0 +1,25 @@
+// .ci/Jenkinsfile.web
+//
+// PLACEHOLDER — slated to replace the existing root-level integ_build.groovy
+// during migration cutover. Do not wire this into Jenkins yet.
+//
+// TODO migration checklist:
+//   [ ] Port the existing web deployment stages from /integ_build.groovy
+//   [ ] Move shell logic into .ci/scripts/build_web.sh (new file, not in this pass)
+//   [ ] Decide on flavors for web (likely 'int' only initially)
+//   [ ] Confirm hosting target (Firebase Hosting? S3+CloudFront? GCS bucket?)
+//   [ ] Hook generate_build_manifest.sh for parity with mobile builds
+//   [ ] Decide on cache headers / cache invalidation strategy on deploy
+//
+// Cutover plan: keep /integ_build.groovy active until this file is validated.
+
+pipeline {
+    agent { label 'flutter-stable-pool' }
+    stages {
+        stage('TODO: migrate from /integ_build.groovy') {
+            steps {
+                error('Jenkinsfile.web is a placeholder. Use the root /integ_build.groovy until migration completes.')
+            }
+        }
+    }
+}
