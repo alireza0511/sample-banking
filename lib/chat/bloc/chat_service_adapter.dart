@@ -80,40 +80,45 @@ class ChatServiceAdapter {
     ChatServiceResponseModel response,
     String pendingMessageId,
   ) {
-    final currentMessages = List<ChatMessage>.from(entity.messages);
+    // Create a completely new list to ensure proper state updates
+    final List<ChatMessage> updatedMessages = [];
 
-    final pendingIndex = currentMessages.indexWhere(
-      (m) => m.id == pendingMessageId,
-    );
-
-    if (pendingIndex >= 0) {
-      currentMessages[pendingIndex] = currentMessages[pendingIndex].copyWith(
-        content: response.content,
-      );
+    for (final message in entity.messages) {
+      if (message.id == pendingMessageId) {
+        // Update the pending message with new content
+        updatedMessages.add(message.copyWith(
+          content: response.content,
+        ));
+      } else {
+        // Preserve all other messages (including user messages)
+        updatedMessages.add(message);
+      }
     }
 
-    return entity.merge(messages: currentMessages);
+    return entity.merge(messages: updatedMessages);
   }
 
   /// Finalize the pending message to sent status
   ChatEntity finalizeMessage(ChatEntity entity, String pendingMessageId) {
-    final currentMessages = List<ChatMessage>.from(entity.messages);
+    // Create a completely new list with new message objects
+    final List<ChatMessage> finalizedMessages = [];
 
-    final pendingIndex = currentMessages.indexWhere(
-      (m) => m.id == pendingMessageId,
-    );
-
-    if (pendingIndex >= 0) {
-      final pendingMessage = currentMessages[pendingIndex];
-      currentMessages[pendingIndex] = ChatMessage.assistant(
-        content: pendingMessage.content,
-        id: pendingMessage.id,
-        isPrivate: _service.isOnDevice,
-      );
+    for (final message in entity.messages) {
+      if (message.id == pendingMessageId) {
+        // Replace pending message with finalized assistant message
+        finalizedMessages.add(ChatMessage.assistant(
+          content: message.content,
+          id: message.id,
+          isPrivate: _service.isOnDevice,
+        ));
+      } else {
+        // Keep other messages as-is
+        finalizedMessages.add(message);
+      }
     }
 
     return entity.merge(
-      messages: currentMessages,
+      messages: finalizedMessages,
       isTyping: false,
     );
   }

@@ -66,7 +66,10 @@ If asked to perform an action, guide the user to the appropriate screen.
       // Load chat history from storage
       List<ChatMessage> messages = [];
       if (_storageService != null) {
-        messages = await _storageService!.loadMessages();
+        final loadedMessages = await _storageService!.loadMessages();
+        // Filter out any pending messages from previous sessions
+        // (they will never complete and should be removed)
+        messages = loadedMessages.where((m) => !m.isPending).toList();
       }
 
       _entity = _entity.merge(
@@ -306,9 +309,12 @@ If asked to perform an action, guide the user to the appropriate screen.
   }
 
   /// Save current messages to storage
+  /// Only saves non-pending messages to prevent stale pending messages
   Future<void> _saveMessages() async {
     if (_storageService != null) {
-      await _storageService!.saveMessages(_entity.messages);
+      // Filter out pending messages before saving
+      final messagesToSave = _entity.messages.where((m) => !m.isPending).toList();
+      await _storageService!.saveMessages(messagesToSave);
     }
   }
 

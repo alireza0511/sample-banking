@@ -480,6 +480,7 @@ class _ChatMessageList extends StatelessWidget {
         itemBuilder: (context, index) {
           final message = messages[index];
           return _MessageBubble(
+            key: ValueKey('msg_${message.id}_${message.status.name}_${message.role.name}'),
             message: message,
             onRetry: message.isError ? onRetry : null,
           );
@@ -495,6 +496,7 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback? onRetry;
 
   const _MessageBubble({
+    super.key,
     required this.message,
     this.onRetry,
   });

@@ -1,166 +1,961 @@
-// .ci/Jenkinsfile.branchtest
-//
-// On-demand feature-branch testing pipeline. Lighter-weight than futuretest:
-// always uses the stable pool, dependencies pinned to main, qa flavor only,
-// distributes to dev-self group. No security/audit stages.
+// =============================================================================
+// Jenkinsfile.branchtest  (transcribed from screenshots)
+// =============================================================================
+// NOTE: The screenshots begin at line 17 (`pipeline {`). The following were
+// NOT visible in the images and are reconstructed/placeholders:
+//   * Lines 1-16 (header / @Library import) - unknown, omitted.
+//   * The `agent`, `parameters`, and top-level `options` directives - the
+//     `parameters {}` block below is INFERRED from every `params.*` reference
+//     used in the pipeline body. Verify against your real file.
+//   * stage('Copy dependencies') (orig. lines 434-450) was collapsed/folded
+//     in the screenshot, so its body is unknown - see the marked placeholder.
+//   * Android build-script line continuations are normalized to `\\` to match
+//     the iOS block (the Android screenshot was lower-res; single `\` would be
+//     a shell-continuation bug inside a Groovy GString).
+// =============================================================================
 
-@Library('shared') _
+// Returns true if `name` is not in the SKIP_STAGES parameter.
+// Extracted to keep the compiled `WorkflowScript` method under the JVM 64KB
+// bytecode limit — every stage's `when { expression { } }` was inlining the
+// same parse+contains logic.
+def stageEnabled(String name) {
+    def skips = (params.SKIP_STAGES ?: '').split(',').collect { it.trim() }.findAll { it }
+    return !skips.contains(name)
+}
 
 pipeline {
-    agent none
 
+    // ---- INFERRED (not visible in screenshots) -----------------------------
+    agent { label "${params.AGENT_LABEL}" }
+
+    // Reconstructed from params.* usage throughout the pipeline.
     parameters {
-        string(name: 'SOURCE_BRANCH', defaultValue: '',                     description: 'App branch to build')
-        choice(name: 'BUILD_TYPE',    choices: ['debug', 'release'],        description: 'Build type')
-        string(name: 'AGENT_LABEL',   defaultValue: 'flutter-stable-pool',  description: 'Agent pool to run on')
+        string(name: 'SOURCE_BRANCH', defaultValue: '', description: 'Feature/source branch to build (required)')
+        string(name: 'DEPENDENCY_BRANCH', defaultValue: 'main', description: 'Dependency branch')
+        string(name: 'BUILD_NUMBER_OVERRIDE', defaultValue: '', description: 'Override the Jenkins build number')
+        choice(name: 'BUILD_TYPE', choices: ['debug', 'release'], description: 'Build type')
+        string(name: 'AGENT_LABEL', defaultValue: 'mac', description: 'Agent pool label')
+        string(name: 'SKIP_STAGES', defaultValue: '', description: 'Comma-separated list of stage names to skip')
+        booleanParam(name: 'VERBOSE_LOGS', defaultValue: false, description: 'Enable verbose logging')
+        booleanParam(name: 'BUILD_QA', defaultValue: false, description: 'Build QA flavor')
+        booleanParam(name: 'BUILD_INT', defaultValue: false, description: 'Build INT flavor')
+        booleanParam(name: 'BUILD_PROD', defaultValue: false, description: 'Build PROD flavor')
+        booleanParam(name: 'BUILD_PREVIEW', defaultValue: false, description: 'Build PREVIEW flavor')
+        booleanParam(name: 'BUILD_MDIRECT', defaultValue: false, description: 'Build MDIRECT flavor')
+        booleanParam(name: 'UPLOAD_TO_CIFS', defaultValue: false, description: 'Upload artifacts to CIFS share')
+        string(name: 'CIFS_FOLDER', defaultValue: '', description: 'Target CIFS sub-folder')
+        booleanParam(name: 'CLEAN_PUB_CACHE', defaultValue: false, description: 'Wipe the agent pub cache before resolving dependencies (forces full re-download)')
+        booleanParam(name: 'CLEAN_PODS_CACHE', defaultValue: false, description: 'Wipe the agent CocoaPods trunk specs cache before pod install (forces full re-download)')
     }
-
-    options {
-        timestamps()
-        buildDiscarder(logRotator(numToKeepStr: '20'))
-        timeout(time: 60, unit: 'MINUTES')
-    }
+    // ------------------------------------------------------------------------
 
     environment {
         FLAVOR = 'qa'
-        DEPENDENCY_BRANCH = 'main'
-        ARTIFACT_SUFFIX = "branch-${params.SOURCE_BRANCH?.replaceAll('/', '-')}-${env.BUILD_NUMBER}"
+        EFFECTIVE_BUILD_NUMBER = "${params.BUILD_NUMBER_OVERRIDE ?: env.BUILD_NUMBER}"
+        DEPENDENCY_BRANCH = "${params.DEPENDENCY_BRANCH ?: 'main'}"
+        ARTIFACT_SUFFIX = "branch-${params.SOURCE_BRANCH?.replaceAll('/', '-')}-${EFFECTIVE_BUILD_NUMBER}"
+        ARTIFACTORY_URL = 'https://huntington.jfrog.io/artifactory/'
+        ARTIFACTORY_PUB_URL = 'https://huntington.jfrog.io/artifactory/api/pub/ent-pub-dev-virtual'
+        ARTIFACTORY_PODS_URL = 'https://huntington.jfrog.io/artifactory/api/pods/cocoapods-virtual'
+        // TODO: replace with a service-account user once provisioned.
+        ARTIFACTORY_PODS_USER = '1khakpour@gmail.com'
+        // Token comes from Jenkins credentials store; ID set up in the Jenkins UI.
+        ARTIFACTORY_PODS_TOKEN = credentials('ARTIFACTORY_PODS_TOKEN_PERSONAL')
+        ARTIFACTORY_REPO = 'ent-pub-dev-virtual'
+        // Android SDK paths
+        ANDROID_HOME = "/Users/srvmacjenkins/Library/Android/sdk"
+        ANDROID_SDK_ROOT = "/Users/srvmacjenkins/Library/Android/sdk"
+        ANDROID_AVD_HOME = "/Users/srvmacjenkins/.android/avd"
+        PATH = "/usr/local/bin:${env.PATH}"
+        POD_PATH = '/usr/local/bin/pod'
+        LANG = 'en_US.UTF-8'
+        LC_ALL = 'en_US.UTF-8'
+        STRICT_VERSION_MATCH = '0'
+        ANDROID_BUILD_FAILED = 'false'
+        IOS_BUILD_FAILED = 'false'
+        ANDROID_BUILD_SUCCESS = 'false'
+        IOS_BUILD_SUCCESS = 'false'
+
+        FLUTTER_PATH = '/Applications/flutter_1.0.0/bin/flutter'
+        DART_PATH = '/Applications/flutter_1.0.0/bin/dart'
+        PUB_CACHE = "/Applications/flutter_1.0.0/.pub-cache/"
+
+        FLUTTER_TOOLS_PATH = '/Applications/flutter_1.0.0/packages/flutter_tools'
     }
 
     stages {
-        stage('Validate') {
-            agent { label params.AGENT_LABEL }
+        stage('Pipeline Diagnostics') {
+            when {
+                expression {
+                    return params.VERBOSE_LOGS && stageEnabled('Pipeline Diagnostics')
+                }
+            }
+            steps {
+                script {
+                    echo "=".multiply(80)
+                    echo "BRANCHTEST BUILD PIPELINE"
+                    echo "=".multiply(80)
+                    echo "Source branch:        ${params.SOURCE_BRANCH}"
+                    echo "Dependency branch:    ${env.DEPENDENCY_BRANCH}"
+                    echo "Flavor:               ${env.FLAVOR}"
+                    echo "Build type:           ${params.BUILD_TYPE}"
+                    echo "Verbose logs:         ${params.VERBOSE_LOGS}"
+                    echo "Build number:         ${env.EFFECTIVE_BUILD_NUMBER}"
+                    echo "Agent pool:           ${params.AGENT_LABEL}"
+                    echo "Agent name:           ${env.NODE_NAME}"
+                    echo "Workspace:            ${env.WORKSPACE}"
+                    echo "ANDROID_HOME:         ${env.ANDROID_HOME}"
+                    echo "=".multiply(80)
+                    echo "[VERBOSE] Environment Variables:"
+                    echo "  EFFECTIVE_BUILD_NUMBER: ${EFFECTIVE_BUILD_NUMBER}"
+                    echo "  ARTIFACT_SUFFIX: ${ARTIFACT_SUFFIX}"
+                    echo "  PUB_CACHE: ${PUB_CACHE}"
+                    echo "  FLUTTER_PATH: ${FLUTTER_PATH}"
+                    echo "  DART_PATH: ${DART_PATH}"
+
+                    // Discover Flutter path from multiple candidate locations
+                    def flutterCandidates = [
+                        '/Applications/flutter_1.0.0/bin/flutter',
+                        '/Applications/flutter_1.0.0copy/bin/flutter'
+                    ]
+                    def dartCandidates = [
+                        '/Applications/flutter_1.0.0/bin/dart',
+                        '/Applications/flutter_1.0.0copy/bin/dart'
+                    ]
+
+                    def foundFlutter = null
+                    def foundDart = null
+
+                    for (flutterPath in flutterCandidates) {
+                        if (sh(script: "[[ -x '${flutterPath}' ]] && '${flutterPath}' --version >/dev/null 2>&1", returnStatus: true) == 0) {
+                            foundFlutter = flutterPath
+                            break
+                        }
+                    }
+
+                    for (dartPath in dartCandidates) {
+                        if (sh(script: "[[ -x '${dartPath}' ]] && '${dartPath}' --version >/dev/null 2>&1", returnStatus: true) == 0) {
+                            foundDart = dartPath
+                            break
+                        }
+                    }
+
+                    echo "Flutter candidate version probe:"
+                    for (flutterPath in flutterCandidates) {
+                        def flutterProbe = sh(
+                            script: "[[ -x '${flutterPath}' ]] && '${flutterPath}' --version 2>/dev/null | head -n 1 || echo 'NOT_EXECUTABLE_OR_MISSING'",
+                            returnStdout: true
+                        ).trim()
+                        echo "  ${flutterPath} -> ${flutterProbe}"
+                    }
+
+                    if (!foundFlutter || !foundDart) {
+                        error "Flutter (${foundFlutter ?: 'NOT FOUND'}) or Dart (${foundDart ?: 'NOT FOUND'}) not found in any candidate location"
+                    }
+
+                    env.FLUTTER_PATH = foundFlutter
+                    env.DART_PATH = foundDart
+                    env.PUB_CACHE = foundFlutter.replaceAll('/bin/flutter$', '') + '/.pub-cache/'
+                    echo "✓ Discovered Flutter at: ${env.FLUTTER_PATH}"
+                    echo "✓ Discovered Dart at: ${env.DART_PATH}"
+                    echo "✓ Derived PUB_CACHE at: ${env.PUB_CACHE}"
+                    echo ""
+                    echo "[VERBOSE] Tool Discovery:"
+                    echo "  Flutter candidates checked: ${flutterCandidates.size()}"
+                    echo "  Dart candidates checked: ${dartCandidates.size()}"
+                    echo "  Flutter selection: ${foundFlutter}"
+                    echo "  Dart selection: ${foundDart}"
+                    echo "=".multiply(80)
+                    echo "MACHINE CONFIGURATION (Installed Versions)"
+                    echo "=".multiply(80)
+                }
+                sh '''
+                    echo "USER=$(whoami)"
+                    echo "SHELL=$SHELL"
+                    echo "PATH=$PATH"
+                    command -v pod || true
+                    which pod || true
+                    gem env || true
+                    ruby --version || true
+                '''
+
+                sh '''
+                    echo "Flutter:"
+                    "${FLUTTER_PATH}" --version || echo "  ⚠ Flutter not found at FLUTTER_PATH=${FLUTTER_PATH}"
+                    echo ""
+
+                    echo "Dart:"
+                    "${DART_PATH}" --version || echo "  ⚠ Dart not found at DART_PATH=${DART_PATH}"
+                    echo ""
+
+                    echo "Java:"
+                    java -version 2>&1 || echo "  ⚠ Java not found in PATH"
+                    javac -version 2>&1 || echo "  ⚠ javac not found in PATH"
+                    echo ""
+
+                    if [[ "$(uname -s)" == "Darwin" ]]; then
+                        echo "Xcode:"
+                        xcodebuild -version || echo "  ⚠ Xcode not found"
+                        echo ""
+
+                        echo "Ruby:"
+                        ruby --version || echo "  ⚠ Ruby not found in PATH"
+                        echo ""
+
+                        echo "CocoaPods:"
+                        "${POD_PATH}" --version || pod --version || echo "  ⚠ CocoaPods not installed"
+                        echo ""
+
+                        echo "macOS Version:"
+                        sw_vers
+                        echo ""
+                    fi
+
+                    echo "Android SDK:"
+                    if [[ -n "${ANDROID_HOME:-}" || -n "${ANDROID_SDK_ROOT:-}" ]]; then
+                        sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+                        sdkmanager_path=""
+                        echo "  ANDROID_HOME: ${ANDROID_HOME:-<unset>}"
+                        echo "  ANDROID_SDK_ROOT: ${ANDROID_SDK_ROOT:-<unset>}"
+
+                        for candidate in \
+                            "${sdk_root}/cmdline-tools/latest/bin/sdkmanager" \
+                            "${sdk_root}/tools/bin/sdkmanager" \
+                            "${sdk_root}/cmdline-tools/bin/sdkmanager"
+                        do
+                            if [[ -f "${candidate}" ]]; then
+                                sdkmanager_path="${candidate}"
+                                break
+                            fi
+                        done
+
+                        if [[ -n "${sdkmanager_path}" ]]; then
+                            echo "  sdkmanager path: ${sdkmanager_path}"
+                            "${sdkmanager_path}" --version 2>&1 || echo "  ⚠ sdkmanager found but not executable"
+                        else
+                            echo "  ⚠ sdkmanager not found in standard locations"
+                            echo "  Searching for sdkmanager under ${sdk_root} (max depth 6):"
+                            find "${sdk_root}" -maxdepth 6 -type f -name sdkmanager 2>/dev/null | sed 's/^/    - /'
+
+                            if [[ -d "${sdk_root}/cmdline-tools" ]]; then
+                                echo "  cmdline-tools directories:"
+                                find "${sdk_root}/cmdline-tools" -maxdepth 2 -type d 2>/dev/null | sed 's/^/    - /'
+                            fi
+                        fi
+                    else
+                        echo "  ⚠ ANDROID_HOME and ANDROID_SDK_ROOT are not set"
+                    fi
+                    echo ""
+
+                    echo "System Info:"
+                    uname -a
+                    echo ""
+                '''
+                script {
+                    echo "=".multiply(80)
+                    echo "NOTE: These are the ACTUAL installed versions."
+                    echo "      Next stage will validate they match requirements in .ci/config/toolchain.yaml"
+                    echo "=".multiply(80)
+                }
+            }
+        }
+
+        stage('Validate Parameters') {
+            when {
+                expression {
+                    return stageEnabled('Validate Parameters')
+                }
+            }
             steps {
                 script {
                     if (!params.SOURCE_BRANCH?.trim()) { error('SOURCE_BRANCH is required.') }
+                    echo "✓ Input validation passed"
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] Input Parameters:"
+                        echo "  SOURCE_BRANCH: ${params.SOURCE_BRANCH}"
+                        echo "  DEPENDENCY_BRANCH: ${params.DEPENDENCY_BRANCH}"
+                        echo "  BUILD_NUMBER_OVERRIDE: ${params.BUILD_NUMBER_OVERRIDE}"
+                        echo "  BUILD_TYPE: ${params.BUILD_TYPE}"
+                        echo "  SKIP_STAGES: ${params.SKIP_STAGES ?: '(none)'}"
+                    }
+                }
+            }
+        }
+
+        stage('Verify Toolchain') {
+            when {
+                expression {
+                    return stageEnabled('Verify Toolchain')
+                }
+            }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps {
+                script {
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] Toolchain Setup Starting..."
+                    }
+                }
+                sh '''
+                    echo "Verifying toolchain versions..."
+                    if [[ "${VERBOSE_LOGS}" == "true" ]]; then
+                        echo "[VERBOSE] Running setup_env.sh with verbose mode..."
+                    fi
+                    .ci/scripts/setup_env.sh
+                '''
+                script {
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] Toolchain Setup Complete"
+                    }
                 }
             }
         }
 
         stage('Checkout') {
-            agent { label params.AGENT_LABEL }
+            when {
+                expression {
+                    return stageEnabled('Checkout')
+                }
+            }
             steps {
+                script {
+                    // Preserve .ci/scripts and .ci/config from Jenkinsfile branch before checking out SOURCE_BRANCH
+                    sh '''
+                        if [[ -d .ci/scripts ]] || [[ -d .ci/config ]]; then
+                            echo "Preserving .ci/scripts and .ci/config from Jenkinsfile branch..."
+                            mkdir -p .ci_backup
+                            [[ -d .ci/scripts ]] && cp -r .ci/scripts .ci_backup/
+                            [[ -d .ci/config ]] && cp -r .ci/config .ci_backup/
+                        fi
+                    '''
+                }
                 checkout([
                     $class: 'GitSCM',
                     branches: [[name: "*/${params.SOURCE_BRANCH}"]],
                     userRemoteConfigs: scm.userRemoteConfigs
                 ])
-                script { env.GIT_SHA = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim() }
-            }
-        }
-
-        stage('Setup Toolchain') {
-            agent { label params.AGENT_LABEL }
-            options { timeout(time: 10, unit: 'MINUTES') }
-            steps { sh '.ci/scripts/setup_env.sh' }
-        }
-
-        stage('Resolve Dependencies') {
-            agent { label params.AGENT_LABEL }
-            options { timeout(time: 10, unit: 'MINUTES') }
-            steps {
-                withCredentials([
-                    string(credentialsId: 'artifactory-url',  variable: 'ARTIFACTORY_URL'),
-                    string(credentialsId: 'artifactory-repo', variable: 'ARTIFACTORY_REPO'),
-                    usernamePassword(
-                        credentialsId: 'artifactory-creds',
-                        usernameVariable: 'ARTIFACTORY_USER',
-                        passwordVariable: 'ARTIFACTORY_TOKEN'
-                    )
-                ]) {
-                    sh ".ci/scripts/setup_dependencies.sh '${env.DEPENDENCY_BRANCH}'"
-                }
-                sh 'flutter pub get'
-            }
-        }
-
-        stage('Unit Tests') {
-            agent { label params.AGENT_LABEL }
-            options { timeout(time: 15, unit: 'MINUTES') }
-            steps {
-                sh 'mkdir -p build/test-results'
-                sh 'flutter test --machine > build/test-results/dart-test.json || true'
-                sh '.ci/scripts/junit_from_dart_test.sh build/test-results/dart-test.json build/test-results/dart-test.xml'
-                junit allowEmptyResults: false, testResults: 'build/test-results/dart-test.xml'
-            }
-        }
-
-        stage('Build') {
-            parallel {
-                stage('Android') {
-                    agent { label params.AGENT_LABEL }
-                    options { timeout(time: 25, unit: 'MINUTES') }
-                    steps {
-                        buildFlutterFlavor(
-                            platform: 'android',
-                            flavor: env.FLAVOR,
-                            buildType: params.BUILD_TYPE,
-                            buildNumber: env.BUILD_NUMBER,
-                            gitSha: env.GIT_SHA,
-                            artifactSuffix: env.ARTIFACT_SUFFIX
-                        )
+                script {
+                    // Restore .ci/scripts and .ci/config from Jenkinsfile branch
+                    sh '''
+                        if [[ -d .ci_backup ]]; then
+                            echo "Restoring .ci/scripts and .ci/config from Jenkinsfile branch..."
+                            mkdir -p .ci
+                            [[ -d .ci_backup/scripts ]] && { rm -rf .ci/scripts; cp -r .ci_backup/scripts .ci/scripts; }
+                            [[ -d .ci_backup/config ]] && { rm -rf .ci/config; cp -r .ci_backup/config .ci/config; }
+                            rm -rf .ci_backup
+                        fi
+                    '''
+                    env.GIT_SHA = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
+                    echo "✓ Checked out ${params.SOURCE_BRANCH} at ${env.GIT_SHA}"
+                    echo "✓ Restored .ci/scripts and .ci/config from release/ci-configuration"
+                    if (params.VERBOSE_LOGS) {
+                        def gitLog = sh(returnStdout: true, script: 'git log -1 --oneline').trim()
+                        def gitBranch = sh(returnStdout: true, script: 'git rev-parse --abbrev-ref HEAD').trim()
+                        echo "[VERBOSE] Git Checkout Details:"
+                        echo "  Short SHA: ${env.GIT_SHA}"
+                        echo "  Current branch: ${gitBranch}"
+                        echo "  Latest commit: ${gitLog}"
                     }
                 }
-                stage('iOS') {
-                    agent { label params.AGENT_LABEL }
-                    options { timeout(time: 35, unit: 'MINUTES') }
-                    steps {
-                        buildFlutterFlavor(
-                            platform: 'ios',
-                            flavor: env.FLAVOR,
-                            buildType: params.BUILD_TYPE,
-                            buildNumber: env.BUILD_NUMBER,
-                            gitSha: env.GIT_SHA,
-                            artifactSuffix: env.ARTIFACT_SUFFIX
-                        )
+            }
+        }
+
+        stage('Check Artifactory Access') {
+            when {
+                expression {
+                    return stageEnabled('Check Artifactory Access')
+                }
+            }
+            steps {
+                script {
+                    echo '[Check Artifactory Access] Starting token probe and setup.'
+                    def dartPath = env.DART_PATH ?: '/Applications/flutter_1.0.0/bin/dart'
+                    env.EFFECTIVE_ARTIFACTORY_URL = env.ARTIFACTORY_URL
+                    env.EFFECTIVE_ARTIFACTORY_PUB_URL = env.ARTIFACTORY_PUB_URL
+                    env.EFFECTIVE_ARTIFACTORY_REPO = env.ARTIFACTORY_REPO
+                    echo "[Check Artifactory Access] Dart path: ${dartPath}"
+                    echo "[Check Artifactory Access] Pub URL: ${env.EFFECTIVE_ARTIFACTORY_PUB_URL}"
+
+                    def tokenAlreadyConfigured = sh(
+                        script: "'${dartPath}' pub token list 2>/dev/null | grep -F '${env.EFFECTIVE_ARTIFACTORY_PUB_URL}' >/dev/null",
+                        returnStatus: true
+                    ) == 0
+                    echo "[Check Artifactory Access] Token already configured on node: ${tokenAlreadyConfigured}"
+
+                    def tokenAddStatus = -1
+
+                    if (tokenAlreadyConfigured) {
+                        echo '[Check Artifactory Access] Token already configured on node - reusing existing token, skipping setup.'
+                        tokenAddStatus = 0
+                    } else {
+                        // Resolve token from process environment first, then fallback to ARTIFACTORY_NUID_TOKEN_TEMP.
+                        if (!env.ARTIFACTORY_NUID_TOKEN?.trim()) {
+                            if (env.ARTIFACTORY_NUID_TOKEN_TEMP?.trim()) {
+                                env.ARTIFACTORY_NUID_TOKEN = env.ARTIFACTORY_NUID_TOKEN_TEMP
+                                echo '[Check Artifactory Access] Loaded ARTIFACTORY_NUID_TOKEN from ARTIFACTORY_NUID_TOKEN_TEMP.'
+                            } else {
+                                echo '[Check Artifactory Access] ARTIFACTORY_NUID_TOKEN_TEMP is not set.'
+                            }
+                        }
+
+                        if (env.ARTIFACTORY_NUID_TOKEN?.trim()) {
+                            echo '[Check Artifactory Access] Attempting token setup from ARTIFACTORY_NUID_TOKEN_TEMP.'
+                            writeFile file: '.artifactory_token.txt', text: env.ARTIFACTORY_NUID_TOKEN + "\n"
+                            tokenAddStatus = sh(
+                                script: """
+                                    set +x
+                                    trap 'rm -f .artifactory_token.txt' EXIT
+                                    cat .artifactory_token.txt | '${dartPath}' pub token add '${env.EFFECTIVE_ARTIFACTORY_PUB_URL}'
+                                """,
+                                returnStatus: true
+                            )
+                            if (tokenAddStatus == 0) {
+                                echo '[Check Artifactory Access] Token setup succeeded. Artifactory mode enabled.'
+                            } else {
+                                echo "[Check Artifactory Access] Token add failed with status=${tokenAddStatus}."
+                            }
+                        } else {
+                            echo '[Check Artifactory Access] No environment token available. Falling back to offline dependencies.'
+                        }
+                    }
+
+                    def tokenConfigured = sh(
+                        script: "'${dartPath}' pub token list 2>/dev/null | grep -F '${env.EFFECTIVE_ARTIFACTORY_PUB_URL}' >/dev/null",
+                        returnStatus: true
+                    ) == 0
+
+                    def resolvedUseArtifactory = tokenConfigured ? 'true' : 'false'
+                    env.USE_ARTIFACTORY = resolvedUseArtifactory
+                    echo "Runtime USE_ARTIFACTORY=${resolvedUseArtifactory}"
+                    echo "env USE_ARTIFACTORY=${env.USE_ARTIFACTORY}"
+                    echo "dart pub token configured for ${env.EFFECTIVE_ARTIFACTORY_PUB_URL}: ${tokenConfigured}"
+                    echo "[Check Artifactory Access] Final decision: ${resolvedUseArtifactory == 'true' ? 'artifactory-first' : 'offline-fallback'}"
+                    currentBuild.description = "Artifactory access: ${env.USE_ARTIFACTORY == 'true' ? 'enabled' : 'fallback'}"
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] Artifactory Access Details:"
+                        echo "  Token source: ARTIFACTORY_NUID_TOKEN_TEMP"
+                        echo "  Token add status: ${tokenAddStatus}"
+                        echo "  Token already on machine: ${tokenAlreadyConfigured}"
+                        echo "  Final configured: ${tokenConfigured}"
+                        echo "  Pub URL: ${env.EFFECTIVE_ARTIFACTORY_PUB_URL}"
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        // stage('Copy dependencies') { ... }   (original lines 434-450)
+        // This stage was COLLAPSED/FOLDED in the screenshot, so its body was
+        // not captured. Restore its contents from the original Jenkinsfile.
+        // =====================================================================
+        stage('Copy dependencies') {
+            steps {
+                script {
+                    echo 'TODO: body of "Copy dependencies" was folded in the screenshots - restore from source.'
+                }
+            }
+        }
+
+        stage('Clean pub cache') {
+            when {
+                expression {
+                    return params.CLEAN_PUB_CACHE && stageEnabled('Clean pub cache')
+                }
+            }
+            steps {
+                sh "bash .ci/scripts/clean_pub_cache.sh '${env.PUB_CACHE ?: ''}'"
+            }
+        }
+
+        stage('Clean pods cache') {
+            when {
+                expression {
+                    return params.CLEAN_PODS_CACHE && stageEnabled('Clean pods cache')
+                }
+            }
+            steps {
+                sh 'bash .ci/scripts/clean_pods_cache.sh'
+            }
+        }
+
+        stage('Configure CocoaPods source') {
+            when {
+                expression {
+                    return stageEnabled('Configure CocoaPods source')
+                }
+            }
+            steps {
+                sh "bash .ci/scripts/setup_cocoapods_source.sh '${env.ARTIFACTORY_PODS_URL ?: ''}'"
+            }
+        }
+
+        stage('Patch broken cached version metadata') {
+            when {
+                expression {
+                    return stageEnabled('Patch broken cached version metadata')
+                }
+            }
+            steps {
+                sh "WALLET_ACCESS_PLATFORM_INTERFACE_VERSION='${env.WALLET_ACCESS_PLATFORM_INTERFACE_VERSION ?: '^1.0.0'}' CHECK_DEPOSIT_ANDROID_VERSION='${env.CHECK_DEPOSIT_ANDROID_VERSION ?: '5.8.3'}' CHECK_DEPOSIT_IOS_VERSION='${env.CHECK_DEPOSIT_IOS_VERSION ?: '4.9.2'}' CHECK_DEPOSIT_PLATFORM_INTERFACE_VERSION='${env.CHECK_DEPOSIT_PLATFORM_INTERFACE_VERSION ?: '0.0.1'}' bash .ci/scripts/patch_broken_version_metadata.sh '${env.PUB_CACHE}'"
+            }
+        }
+
+        stage('Download dependencies') {
+            when {
+                expression {
+                    return stageEnabled('Download dependencies')
+                }
+            }
+            steps {
+                withEnv(["PUB_CACHE=${env.PUB_CACHE}"]) {
+                    script {
+                        try {
+                            echo "  USE_ARTIFACTORY status: ${env.USE_ARTIFACTORY}"
+                            echo "  PUB_CACHE=${env.PUB_CACHE}"
+
+                            def verboseEnabled = params.VERBOSE_LOGS ? 'y' : 'n'
+                            def artifactoryUrl = env.USE_ARTIFACTORY == 'true' ? env.ARTIFACTORY_PUB_URL : ''
+                            echo "Download dependencies diagnostics"
+                            echo "PUB_CACHE=${env.PUB_CACHE}"
+                            echo "USE_ARTIFACTORY=${env.USE_ARTIFACTORY}"
+                            echo "ARTIFACTORY_PUB_URL=${artifactoryUrl ?: 'N/A (offline mode)'}"
+
+                            sh "bash .ci/scripts/setup_env.sh ${verboseEnabled} '${artifactoryUrl}' 'pubget'"
+                            currentBuild.description = 'Download dependencies'
+                        } catch (Exception e) {
+                            echo 'Exception occurred in Download dependencies stage: ' + e.toString();
+                            echo "Current build result: ${currentBuild.currentResult}"
+                            sh "find ${env.PUB_CACHE}hosted/pub.dev -maxdepth 1 -type d -name 'mocktail-*' -print || true"
+                            sh "ls -la ${env.PUB_CACHE}hosted/pub.dev | head -n 50 || true"
+                            throw e
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Android') {
+            when {
+                expression {
+                    return stageEnabled('Build Android')
+                }
+            }
+            options { timeout(time: 25, unit: 'MINUTES') }
+            steps {
+                script {
+                    def selectedFlavorCount = 0
+                    if (params.BUILD_QA) { selectedFlavorCount++ }
+                    if (params.BUILD_INT) { selectedFlavorCount++ }
+                    if (params.BUILD_PROD) { selectedFlavorCount++ }
+                    if (params.BUILD_PREVIEW) { selectedFlavorCount++ }
+                    if (params.BUILD_MDIRECT) { selectedFlavorCount++ }
+
+                    if (selectedFlavorCount == 0) {
+                        error('No flavors selected. Enable at least one of BUILD_QA/BUILD_INT/BUILD_PROD/BUILD_PREVIEW/BUILD_MDIRECT.')
+                    }
+
+                    if (params.BUILD_TYPE == 'release') {
+                        if (!env.KEYSTORE_FILE?.trim() || !env.KEYSTORE_PASSWORD?.trim() || !env.KEY_ALIAS?.trim() || !env.KEY_PASSWORD?.trim()) {
+                            error('Release Android build requires KEYSTORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD in environment.')
+                        }
+                    }
+
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] Android Build (static parallel):"
+                        echo "  Build type: ${params.BUILD_TYPE}"
+                        echo "  Build number: ${env.EFFECTIVE_BUILD_NUMBER}"
+                        echo "  Git SHA: ${env.GIT_SHA}"
+                        echo "  Android Home: ${env.ANDROID_HOME}"
+                    }
+
+                    sh 'rm -rf .ci/.build-status/android && mkdir -p .ci/.build-status/android'
+
+                    def runAndroidFlavor = { String flavor ->
+                        try {
+
+                            sh """
+                                export ANDROID_HOME="${env.ANDROID_HOME}"
+                                export ANDROID_SDK_ROOT="${env.ANDROID_SDK_ROOT}"
+                                export ANDROID_AVD_HOME="${env.ANDROID_AVD_HOME}"
+
+                                .ci/scripts/build_android.sh \\
+                                    --flavor=${flavor} \\
+                                    --build-type=${params.BUILD_TYPE} \\
+                                    --build-number=${env.EFFECTIVE_BUILD_NUMBER} \\
+                                    --git-sha=${env.GIT_SHA} \\
+                                    --suffix=${env.ARTIFACT_SUFFIX}-${flavor}
+                            """
+
+                            writeFile file: ".ci/.build-status/android/${flavor}.ok", text: 'ok\n'
+                        } catch (Exception e) {
+                            writeFile file: ".ci/.build-status/android/${flavor}.failed", text: e.toString() + "\n"
+                            echo "⚠ Android ${flavor} failed: ${e.toString()}"
+                        }
+                    }
+
+                    parallel(
+                        QA: {
+                            if (params.BUILD_QA) {
+                                runAndroidFlavor('qa')
+                            } else {
+                                echo 'Skipping Android qa (BUILD_QA=false)'
+                            }
+                        },
+                        INT: {
+                            if (params.BUILD_INT) {
+                                runAndroidFlavor('int')
+                            } else {
+                                echo 'Skipping Android int (BUILD_INT=false)'
+                            }
+                        },
+                        PROD: {
+                            if (params.BUILD_PROD) {
+                                runAndroidFlavor('prod')
+                            } else {
+                                echo 'Skipping Android prod (BUILD_PROD=false)'
+                            }
+                        },
+                        PREVIEW: {
+                            if (params.BUILD_PREVIEW) {
+                                runAndroidFlavor('preview')
+                            } else {
+                                echo 'Skipping Android preview (BUILD_PREVIEW=false)'
+                            }
+                        },
+                        MDIRECT: {
+                            if (params.BUILD_MDIRECT) {
+                                runAndroidFlavor('mdirect')
+                            } else {
+                                echo 'Skipping Android mdirect (BUILD_MDIRECT=false)'
+                            }
+                        }
+                    )
+
+                    int androidSuccessCount = sh(returnStdout: true, script: "ls -1 .ci/.build-status/android/*.ok 2>/dev/null | wc -l | tr -d ' '").trim().toInteger()
+                    int androidFailureCount = sh(returnStdout: true, script: "ls -1 .ci/.build-status/android/*.failed 2>/dev/null | wc -l | tr -d ' '").trim().toInteger()
+
+                    if (androidSuccessCount == 0) {
+                        env.ANDROID_BUILD_FAILED = 'true'
+                        env.ANDROID_BUILD_SUCCESS = 'false'
+                        unstable('Build Android failed for all selected flavors; continuing to attempt Build iOS.')
+                    } else {
+                        env.ANDROID_BUILD_FAILED = 'false'
+                        env.ANDROID_BUILD_SUCCESS = 'true'
+                        if (androidFailureCount > 0) {
+                            unstable('Build Android failed for some flavors, but at least one flavor succeeded.')
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build iOS') {
+            when {
+                allOf {
+                    expression {
+                        return stageEnabled('Build iOS')
+                    }
+                    expression {
+                        def result = sh(returnStdout: true, script: 'uname -s').trim()
+                        return result == 'Darwin'
+                    }
+                }
+            }
+            options { timeout(time: 35, unit: 'MINUTES') }
+            steps {
+                script {
+                    def selectedFlavorCount = 0
+                    if (params.BUILD_QA) { selectedFlavorCount++ }
+                    if (params.BUILD_INT) { selectedFlavorCount++ }
+                    if (params.BUILD_PROD) { selectedFlavorCount++ }
+                    if (params.BUILD_PREVIEW) { selectedFlavorCount++ }
+                    if (params.BUILD_MDIRECT) { selectedFlavorCount++ }
+
+                    if (selectedFlavorCount == 0) {
+                        error('No flavors selected. Enable at least one of BUILD_QA/BUILD_INT/BUILD_PROD/BUILD_PREVIEW/BUILD_MDIRECT.')
+                    }
+
+                    if (params.BUILD_TYPE == 'release') {
+                        if (!env.P12_FILE?.trim() || !env.P12_PASSWORD?.trim() || !env.PROVISIONING_PROFILE?.trim()) {
+                            error('Release iOS build requires P12_FILE, P12_PASSWORD, PROVISIONING_PROFILE in environment.')
+                        }
+                    }
+
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] iOS Build (static parallel):"
+                        echo "  Build type: ${params.BUILD_TYPE}"
+                        echo "  Build number: ${env.EFFECTIVE_BUILD_NUMBER}"
+                        echo "  Git SHA: ${env.GIT_SHA}"
+                        echo "  Provisioning profile configured: ${env.PROVISIONING_PROFILE ? 'yes' : 'no'}"
+                    }
+
+                    // Regenerate Flutter pub dependencies and run pod install once to avoid symlink race conditions in parallel builds
+                    echo "Regenerating Flutter dependencies before parallel iOS builds..."
+
+                    // if (params.VERBOSE_LOGS) {
+                    //     sh """
+                    //         ${env.FLUTTER_PATH} pub get --offline 2>/dev/null || ${env.FLUTTER_PATH} pub get --verbose
+                    //     """
+                    // } else {
+
+                    //     sh """
+                    //         ${env.FLUTTER_PATH} pub get --offline 2>/dev/null || ${env.FLUTTER_PATH} pub get
+                    //     """
+                    // }
+
+                    echo "Running pod install once to resolve all CocoaPods dependencies..."
+
+                    sh """
+                        echo '[Pods] Configured spec repos:'
+                        ${env.POD_PATH} repo list
+                        echo '[Pods] trunk .url contents:'
+                        cat \$HOME/.cocoapods/repos/trunk/.url 2>/dev/null || echo '  (no .url file — trunk not initialized)'
+                        cd ios
+                        ${env.POD_PATH} install --repo-update
+                        cd ..
+                    """
+
+                    sh 'rm -rf .ci/.build-status/ios && mkdir -p .ci/.build-status/ios'
+
+                    def runIosFlavor = { String flavor ->
+                        try {
+                            if (params.BUILD_TYPE == 'release') {
+                                sh """
+                                    .ci/scripts/ios_keychain_setup.sh \"${P12_FILE}\" \"${PROVISIONING_PROFILE}\"
+                                """
+                                try {
+                                    sh """
+                                        .ci/scripts/build_ios.sh \\
+                                            --flavor=${flavor} \\
+                                            --build-type=${BUILD_TYPE} \\
+                                            --build-number=${EFFECTIVE_BUILD_NUMBER} \\
+                                            --git-sha=${GIT_SHA} \\
+                                            --suffix=${ARTIFACT_SUFFIX}-${flavor}
+                                    """
+                                } finally {
+                                    sh '.ci/scripts/ios_keychain_teardown.sh || true'
+                                }
+                            } else {
+                                sh """
+                                    .ci/scripts/build_ios.sh \\
+                                        --flavor=${flavor} \\
+                                        --build-type=${BUILD_TYPE} \\
+                                        --build-number=${EFFECTIVE_BUILD_NUMBER} \\
+                                        --git-sha=${GIT_SHA} \\
+                                        --suffix=${ARTIFACT_SUFFIX}-${flavor}
+                                """
+                            }
+
+                            writeFile file: ".ci/.build-status/ios/${flavor}.ok", text: 'ok\n'
+                        } catch (Exception e) {
+                            writeFile file: ".ci/.build-status/ios/${flavor}.failed", text: e.toString() + "\n"
+                            echo "⚠ iOS ${flavor} failed: ${e.toString()}"
+                        }
+                    }
+
+                    parallel(
+                        QA: {
+                            if (params.BUILD_QA) {
+                                runIosFlavor('qa')
+                            } else {
+                                echo 'Skipping iOS qa (BUILD_QA=false)'
+                            }
+                        },
+                        INT: {
+                            if (params.BUILD_INT) {
+                                runIosFlavor('int')
+                            } else {
+                                echo 'Skipping iOS int (BUILD_INT=false)'
+                            }
+                        },
+                        PROD: {
+                            if (params.BUILD_PROD) {
+                                runIosFlavor('prod')
+                            } else {
+                                echo 'Skipping iOS prod (BUILD_PROD=false)'
+                            }
+                        },
+                        PREVIEW: {
+                            if (params.BUILD_PREVIEW) {
+                                runIosFlavor('preview')
+                            } else {
+                                echo 'Skipping iOS preview (BUILD_PREVIEW=false)'
+                            }
+                        },
+                        MDIRECT: {
+                            if (params.BUILD_MDIRECT) {
+                                runIosFlavor('mdirect')
+                            } else {
+                                echo 'Skipping iOS mdirect (BUILD_MDIRECT=false)'
+                            }
+                        }
+                    )
+
+                    int iosSuccessCount = sh(returnStdout: true, script: "ls -1 .ci/.build-status/ios/*.ok 2>/dev/null | wc -l | tr -d ' '").trim().toInteger()
+                    int iosFailureCount = sh(returnStdout: true, script: "ls -1 .ci/.build-status/ios/*.failed 2>/dev/null | wc -l | tr -d ' '").trim().toInteger()
+
+                    if (iosSuccessCount == 0) {
+                        env.IOS_BUILD_FAILED = 'true'
+                        env.IOS_BUILD_SUCCESS = 'false'
+                        unstable('Build iOS failed for all selected flavors; continuing if Android succeeded.')
+                    } else {
+                        env.IOS_BUILD_FAILED = 'false'
+                        env.IOS_BUILD_SUCCESS = 'true'
+                        if (iosFailureCount > 0) {
+                            unstable('Build iOS failed for some flavors, but at least one flavor succeeded.')
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Evaluate Build Outcomes') {
+            steps {
+                script {
+                    echo "Android build success: ${env.ANDROID_BUILD_SUCCESS}"
+                    echo "iOS build success: ${env.IOS_BUILD_SUCCESS}"
+                    if (env.ANDROID_BUILD_SUCCESS != 'true' && env.IOS_BUILD_SUCCESS != 'true') {
+                        echo 'No successful builds. Remaining post-build stages will be skipped.'
                     }
                 }
             }
         }
 
         stage('Generate Manifest') {
-            agent { label params.AGENT_LABEL }
+            when {
+                expression {
+                    return stageEnabled('Generate Manifest') && (env.ANDROID_BUILD_SUCCESS == 'true' || env.IOS_BUILD_SUCCESS == 'true')
+                }
+            }
             steps {
+                script {
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] Manifest Generation:"
+                        echo "  Source branch: ${params.SOURCE_BRANCH}"
+                        echo "  Dependency branch: ${env.DEPENDENCY_BRANCH}"
+                        echo "  Git SHA: ${env.GIT_SHA}"
+                        echo "  Build number: ${env.EFFECTIVE_BUILD_NUMBER}"
+                        echo "  Flavor: ${env.FLAVOR}"
+                    }
+                }
                 sh """
-                    .ci/scripts/generate_build_manifest.sh \
-                      --feature-branch='${params.SOURCE_BRANCH}' \
-                      --dependency-branch='${env.DEPENDENCY_BRANCH}' \
-                      --git-sha='${env.GIT_SHA}' \
-                      --build-number='${env.BUILD_NUMBER}' \
-                      --flavor='${env.FLAVOR}' \
-                      --build-type='${params.BUILD_TYPE}'
+                    .ci/scripts/generate_build_manifest.sh \\
+                        --feature-branch='${params.SOURCE_BRANCH}' \\
+                        --dependency-branch='${env.DEPENDENCY_BRANCH}' \\
+                        --git-sha='${env.GIT_SHA}' \\
+                        --build-number='${env.EFFECTIVE_BUILD_NUMBER}' \\
+                        --flavor='${env.FLAVOR}' \\
+                        --build-type='${params.BUILD_TYPE}'
+                    echo "✓ Build manifest generated"
                 """
             }
         }
 
         stage('Archive') {
-            agent { label params.AGENT_LABEL }
+            when {
+                expression {
+                    return stageEnabled('Archive') && (env.ANDROID_BUILD_SUCCESS == 'true' || env.IOS_BUILD_SUCCESS == 'true')
+                }
+            }
             steps {
-                archiveArtifacts artifacts: 'build/dist/**/*, pubspec_overrides.yaml, pubspec.lock', fingerprint: true
+                archiveArtifacts artifacts: 'build/dist/**/*', allowEmptyArchive: false, fingerprint: true
+                archiveArtifacts artifacts: 'pubspec_overrides.yaml, pubspec.lock', allowEmptyArchive: true, fingerprint: true
+                echo "✓ Artifacts archived"
+                script {
+                    if (params.VERBOSE_LOGS) {
+                        sh '''
+                            echo "[VERBOSE] Archived Artifacts:"
+                            if [[ -d build/dist ]]; then
+                                artifact_count=$(find build/dist -type f | wc -l | xargs)
+                                echo "  Total files in build/dist: $artifact_count"
+                            fi
+                            if [[ -f pubspec.lock ]]; then
+                                echo "  ✓ pubspec.lock ($(wc -c < pubspec.lock | xargs) bytes)"
+                            fi
+                        '''
+                    }
+                }
             }
         }
 
         stage('Distribute') {
-            agent { label params.AGENT_LABEL }
-            when { expression { params.BUILD_TYPE == 'release' } }
+            when {
+                allOf {
+                    expression {
+                        return stageEnabled('Distribute')
+                    }
+                    expression {
+                        return (env.ANDROID_BUILD_SUCCESS == 'true' || env.IOS_BUILD_SUCCESS == 'true')
+                    }
+                    // expression { params.BUILD_TYPE == 'release' }
+                    // expression { params.UPLOAD_TO_CIFS == true }
+                }
+            }
             steps {
                 script {
-                    buildFlutterFlavor.distributeInternal(
-                        flavor: env.FLAVOR,
-                        buildType: params.BUILD_TYPE,
-                        testerGroup: 'dev-self'
+                    if (params.VERBOSE_LOGS) {
+                        echo "[VERBOSE] Distribution Starting:"
+                        echo "  Target share: AppStore-NEW"
+                        echo "  Build type: ${params.BUILD_TYPE}"
+                        echo "  Upload enabled: ${params.UPLOAD_TO_CIFS}"
+                    }
+                    echo "Uploading artifacts to CIFS share: AppStore-NEW"
+
+                    // Get build version from pubspec.yaml
+                    def buildVersion = sh(
+                        returnStdout: true,
+                        script: '''grep '^version:' pubspec.yaml | awk '{print $2}' | tr -d '"' | cut -d'+' -f1'''
+                    ).trim()
+
+                    def remoteDir = "binaries/${params.CIFS_FOLDER}/iphone/build_${env.EFFECTIVE_BUILD_NUMBER}_${buildVersion}.${env.EFFECTIVE_BUILD_NUMBER}"
+
+                    echo "Remote directory: ${remoteDir}"
+                    echo "Artifacts: build/dist/**"
+
+                    // Upload using CIFS Publisher plugin
+                    // NOTE: Requires CIFS Publisher Jenkins plugin configured with share 'AppStore-NEW'
+                    cifsPublisher(
+                        publishers: [[
+                            configName: 'AppStore-NEW',
+                            transfers: [[
+                                sourceFiles: 'build/dist/**/*',
+                                removePrefix: 'build/dist',
+                                remoteDirectory: remoteDir,
+                                flatten: false
+                            ]],
+                            verbose: true
+                        ]]
                     )
+
+                    echo "✓ Artifacts uploaded to CIFS share"
                 }
             }
         }
+
     }
 
     post {
         always {
-            node(params.AGENT_LABEL) {
-                sh '.ci/scripts/ios_keychain_teardown.sh || true'
-                cleanWs()
+            script {
+                echo "=".multiply(80)
+                echo "BUILD ${currentBuild.currentResult}"
+                echo "Build Number: ${env.EFFECTIVE_BUILD_NUMBER}"
+                echo "Duration: ${currentBuild.durationString}"
+                echo "=".multiply(80)
             }
+            sh '''
+                if [[ "$(uname -s)" == "Darwin" ]] && [[ -f .ci/scripts/ios_keychain_teardown.sh ]]; then
+                    .ci/scripts/ios_keychain_teardown.sh || echo "⚠ Keychain cleanup failed (may not exist)"
+                fi
+            '''
+        }
+        success {
+            echo "✅ Branchtest build completed successfully"
+        }
+        failure {
+            echo "❌ Branchtest build failed - check logs above"
+        }
+        cleanup {
+            cleanWs()
         }
     }
 }
