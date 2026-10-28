@@ -91,7 +91,8 @@ class ApiClient extends RestApi<RestResponse<String>> {
       }
 
       _log('<<< Response ${response.statusCode}');
-      _log('<<< Body: ${response.body.length > 200 ? '${response.body.substring(0, 200)}...' : response.body}');
+      // Plaid responses carry link tokens; never log them.
+      if (!path.contains('plaid/')) _log('<<< Body: ${response.body.length > 200 ? '${response.body.substring(0, 200)}...' : response.body}');
 
       return RestResponse<String>(
         type: getResponseTypeFromCode(response.statusCode),

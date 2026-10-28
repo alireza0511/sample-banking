@@ -41,6 +41,7 @@ class DeepLinkHandler {
       params: [RouteParams.accountId, RouteParams.filter],
     ),
     '/cards': DeepLinkConfig(requiresAuth: true),
+    '/linked-accounts': DeepLinkConfig(requiresAuth: true),
     '/chat': DeepLinkConfig(
       requiresAuth: true,
       params: [RouteParams.prompt],

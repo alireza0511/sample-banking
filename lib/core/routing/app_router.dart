@@ -10,6 +10,7 @@ import '../../balance/ui/balance_screen.dart';
 import '../../bills/ui/bills_screen.dart';
 import '../../cards/ui/cards_screen.dart';
 import '../../chat/ui/chat_feature_widget.dart';
+import '../../linked_accounts/ui/linked_accounts_screen.dart';
 import '../../transactions/ui/transactions_screen.dart';
 import '../../transfer/ui/transfer_screen.dart';
 import '../../hub/ui/simple_hub_screen.dart';
@@ -220,6 +221,13 @@ class AppRouter {
         path: Routes.aiDashboard,
         name: 'aiDashboard',
         builder: (context, state) => const AiDashboardScreen(),
+      ),
+
+      // Linked accounts (Plaid Link)
+      GoRoute(
+        path: Routes.linkedAccounts,
+        name: 'linkedAccounts',
+        builder: (context, state) => const LinkedAccountsScreen(),
       ),
 
       // Settings screen

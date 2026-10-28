@@ -19,6 +19,7 @@ class Routes {
   static const String chat = '/chat';
   static const String settings = '/settings';
   static const String settingsPrivacy = '/settings/privacy';
+  static const String linkedAccounts = '/linked-accounts';
 
   // AI Dashboard
   static const String aiDashboard = '/ai-dashboard';

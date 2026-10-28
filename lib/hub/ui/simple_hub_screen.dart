@@ -22,6 +22,7 @@ class _SimpleHubScreenState extends State<SimpleHubScreen> {
     'Pay Bills',
     'Cards',
     'Transactions',
+    'Link Bank',
   ];
 
   // All available actions
@@ -32,6 +33,7 @@ class _SimpleHubScreenState extends State<SimpleHubScreen> {
     'Pay Bills',
     'Cards',
     'Transactions',
+    'Link Bank',
     'Zelle',
     'Loan Access',
     'Check Deposit',
@@ -66,7 +68,9 @@ class _SimpleHubScreenState extends State<SimpleHubScreen> {
   void _handleActionTap(String action) {
     final lowerAction = action.toLowerCase();
 
-    if (lowerAction.contains('ai dashboard')) {
+    if (lowerAction.contains('link bank')) {
+      context.push(Routes.linkedAccounts);
+    } else if (lowerAction.contains('ai dashboard')) {
       context.push(Routes.aiDashboard);
     } else if (lowerAction.contains('account') || lowerAction.contains('balance')) {
       context.push(Routes.balance);

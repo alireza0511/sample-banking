@@ -18,6 +18,7 @@ class SensitiveRoutes {
     Routes.payBills,
     Routes.balance,
     Routes.settingsPrivacy,
+    Routes.linkedAccounts,
   };
 
   /// go_router route names — kept in sync with `app_router.dart`.
@@ -30,6 +31,7 @@ class SensitiveRoutes {
     'payBills',
     'balance',
     'settingsPrivacy',
+    'linkedAccounts',
   };
 
   /// True if [identifier] (a path like `/transfer/confirm` or a route name like

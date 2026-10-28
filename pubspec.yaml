@@ -55,6 +55,7 @@ dependencies:
   # Local packages
   banking_genui_components:
     path: "./package/banking_genui_components"
+  plaid_link_flutter: ^1.2.1
 
 dev_dependencies:
   flutter_test:

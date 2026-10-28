@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import 'account_linking/account_linking.dart';
 import 'config/app_config.dart';
 import 'intents/intent_service.dart';
 import 'llm/llm_manager.dart';
@@ -20,6 +21,7 @@ class AppLocator {
   static IntentService? _intentService;
   static SpeechManager? _speechManager;
   static TtsManager? _ttsManager;
+  static AccountLinkingService? _accountLinkingService;
 
   /// Get the shared ApiClient instance
   static ApiClient get apiClient {
@@ -55,6 +57,13 @@ class AppLocator {
   static TtsManager get ttsManager {
     _ttsManager ??= TtsManager();
     return _ttsManager!;
+  }
+
+  /// Get the shared AccountLinkingService instance
+  /// Swap the provider here (e.g. replace Plaid with another SDK)
+  static AccountLinkingService get accountLinkingService {
+    _accountLinkingService ??= PlaidAccountLinkingService();
+    return _accountLinkingService!;
   }
 
   /// Initialize all dependencies

@@ -58,6 +58,17 @@ class AppConfig {
     }
   }
 
+  /// Plaid token server (holds the Plaid secret; see tool/plaid_server)
+  static String get plaidServerUrl {
+    switch (_environment) {
+      case Environment.development:
+        return 'http://localhost:3001';
+      case Environment.staging:
+      case Environment.production:
+        return baseUrl;
+    }
+  }
+
   /// Deep link scheme
   static const String deepLinkScheme = 'kindbanking';
 
