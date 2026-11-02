@@ -153,3 +153,21 @@ This happens **before** the customer sees anything, usually because the token is
 | Plaid wrapper (only Plaid import) | `lib/core/account_linking/plaid_account_linking_service.dart` |
 | Where Plaid is chosen | `lib/core/locator.dart` → `accountLinkingService` |
 | Tests for the wrapper (fake SDK) | `test/core/account_linking/plaid_account_linking_service_test.dart` |
+
+---
+
+## Sources (Plaid documentation)
+
+| Topic | Link |
+|---|---|
+| Plaid Link for Flutter (official guide) | https://plaid.com/docs/link/flutter/ |
+| `plaid_link_flutter` source code | https://github.com/plaid/plaid-link-flutter |
+| `plaid_link_flutter` on pub.dev | https://pub.dev/packages/plaid_link_flutter |
+| What Plaid Link is (overview) | https://plaid.com/docs/link/ |
+| Native SDKs the Flutter package wraps | [iOS](https://plaid.com/docs/link/ios/) · [Android](https://plaid.com/docs/link/android/) |
+| Reconnect / add accounts (update mode) | https://plaid.com/docs/link/update-mode/ |
+| Banks that sign in through their own site (OAuth) | https://plaid.com/docs/link/oauth/ |
+| Link best practices (UX, conversion) | https://plaid.com/docs/link/best-practices/ |
+| Error codes shown in `onExit` | https://plaid.com/docs/errors/ |
+| Test accounts and credentials (Sandbox) | https://plaid.com/docs/sandbox/ |
+| Glossary (link_token, public_token, Item…) | https://plaid.com/docs/quickstart/glossary/ |

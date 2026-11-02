@@ -159,3 +159,48 @@ sequenceDiagram
 ## Today vs. production
 
 In this sample app, a small **practice server** (`tool/plaid_server`) stands in for the front desk, back office and safe so developers can try it out. **It is not meant for real customers.** In production, all of that is replaced by the bank's real backend, as shown above.
+
+---
+
+## Sources (Plaid documentation)
+
+**Start here**
+
+| Topic | Link |
+|---|---|
+| Quickstart: the whole flow end to end | https://plaid.com/docs/quickstart/ |
+| Glossary (link_token, public_token, access_token, Item) | https://plaid.com/docs/quickstart/glossary/ |
+| What Plaid Link is (the secure screen) | https://plaid.com/docs/link/ |
+| Plaid Link for Flutter | https://plaid.com/docs/link/flutter/ |
+
+**Each part of the flow**
+
+| Part | Plaid call | Link |
+|---|---|---|
+| Part 1: one-time ticket | `/link/token/create` | https://plaid.com/docs/api/link/#linktokencreate |
+| Part 3: swap receipt for permanent key | `/item/public_token/exchange` | https://plaid.com/docs/api/items/#itempublic_tokenexchange |
+| Part 3: read accounts and balances | `/accounts/get` | https://plaid.com/docs/api/accounts/#accountsget |
+| Part 4: messages from Plaid | Webhooks | https://plaid.com/docs/api/webhooks/ |
+| Part 4: checking a message is really from Plaid | Webhook verification | https://plaid.com/docs/api/webhooks/webhook-verification/ |
+| Part 4: "please reconnect" | Update mode | https://plaid.com/docs/link/update-mode/ |
+| Unlinking a bank | `/item/remove` | https://plaid.com/docs/api/items/#itemremove |
+
+**What data we can get (products)**
+
+| Product | Link |
+|---|---|
+| Auth (account and routing numbers) | https://plaid.com/docs/auth/ |
+| Balance | https://plaid.com/docs/balance/ |
+| Transactions | https://plaid.com/docs/transactions/ |
+| Identity | https://plaid.com/docs/identity/ |
+| Investments | https://plaid.com/docs/investments/ |
+| Liabilities | https://plaid.com/docs/liabilities/ |
+
+**Security, compliance and going live**
+
+| Topic | Link |
+|---|---|
+| Plaid account security | https://plaid.com/docs/account/security/ |
+| Launch checklist (before real customers) | https://plaid.com/docs/launch-checklist/ |
+| Error codes | https://plaid.com/docs/errors/ |
+| Customer portal to see or revoke connections | https://my.plaid.com/ |
