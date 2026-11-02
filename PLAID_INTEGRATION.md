@@ -69,7 +69,7 @@ class AccountLinkCancelled extends AccountLinkResult { final String? errorMessag
 1. Write `XyzAccountLinkingService implements AccountLinkingService`.
 2. Change one line in `AppLocator.accountLinkingService` (`lib/core/locator.dart`).
 3. Remove `plaid_link_flutter` from `pubspec.yaml`.
-4. Update the token server for the new provider. The server URLs still say `plaid` (see [Known limits](#7-known-limits)).
+4. Update the backend for the new provider. The server URLs still say `plaid` (see [Known limits](#7-known-limits) and [Production backend](#8-production-enterprise-backend)).
 
 ---
 
@@ -212,7 +212,48 @@ await session.open();
 
 ---
 
-## 8. Security checklist for reviewers
+## 8. Production (enterprise) backend
+
+`tool/plaid_server` is a **learning stand-in**. In a real banking app there is no separate token server. Its two jobs become **endpoints in the bank's existing backend**, behind the same API gateway, auth and monitoring as every other banking API.
+
+The two jobs exist because both need the Plaid secret, which can never ship in the app:
+
+1. Create the `link_token`.
+2. Exchange the `public_token` for an `access_token`.
+
+Suggested provider-neutral endpoints:
+
+| Endpoint | Job |
+|---|---|
+| `POST /api/v1/linked-accounts/link-token` | Create a `link_token` for the logged-in customer |
+| `POST /api/v1/linked-accounts/exchange` | Exchange the `public_token`, store the `access_token`, return accounts |
+| `GET /api/v1/linked-accounts` | List the caller's linked accounts |
+| `DELETE /api/v1/linked-accounts/{id}` | Unlink: call Plaid `/item/remove`, then delete the token |
+
+### What the stand-in skips that production must do
+
+| Local server (learning) | Enterprise backend |
+|---|---|
+| No auth; anything on localhost can call it | Requires the customer's session, like every banking API |
+| `client_user_id` hard-coded | Real customer ID taken from the session |
+| `access_token` in memory, lost on restart | Encrypted at rest in a database, tied to the customer |
+| Secret from environment variables | Secret in a secrets manager (Vault, AWS Secrets Manager, etc.) |
+| Returns every linked account to every caller | Returns only the caller's own accounts (IDOR check) |
+| Sandbox only | Separate Sandbox / Development / Production keys per environment |
+| No webhooks | Handles Plaid webhooks, e.g. `ITEM_LOGIN_REQUIRED` when the user changes their bank password |
+| No re-link | Supports Link *update mode* so users can repair a broken connection |
+| No audit trail | Audit logs and rate limits; linking an outside account is a regulated action |
+
+### App changes for production
+
+The app and the `AccountLinkingService` wrapper carry over unchanged, apart from two things:
+
+- **Use the shared, authenticated `ApiClient`.** `LinkedAccountsUseCase` currently builds its own `ApiClient(baseUrl: AppConfig.plaidServerUrl)`, which never gets the user's auth token. In production, use `AppLocator.apiClient` and remove `plaidServerUrl`.
+- **Rename the paths** from `api/v1/plaid/...` to the provider-neutral ones above, and update the `plaid/` log filter in `ApiClient` to match.
+
+---
+
+## 9. Security checklist for reviewers
 
 - [ ] Plaid `secret` exists only in the token server's environment. It is not in the app, git, or any file.
 - [ ] `access_token` never leaves the server. The app only receives account summaries (name, last 4 digits, type, balance).
